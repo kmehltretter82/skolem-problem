@@ -1,3 +1,6 @@
+# Downloaded papers / preprints
+papers/
+
 # Python
 __pycache__/
 *.py[cod]

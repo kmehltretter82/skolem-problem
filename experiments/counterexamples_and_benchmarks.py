@@ -15,6 +15,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from src.deterministic_zero_test import (
     construct_ghost_root_counterexamples,
     construct_pisano_counterexample,
+    factorization_free_D_nu_zero_test,
+    order3_global_local_dichotomy,
+    order4_global_local_dichotomy,
     solve_bounded_skolem_deterministic,
 )
 from src.skolem_algorithm import LinearRecurrenceSequence
@@ -111,7 +114,33 @@ def run_deterministic_solver_benchmarks() -> None:
     print("All deterministic solver benchmarks passed!\n")
 
 
+def run_global_local_dichotomy_demo() -> None:
+    print("=== 4. Theorems 3 & 4: Global-Local Dichotomy (Transition Window Elimination) ===")
+    # 1. SODA 2026 Order-3 example: x^3 - 2 x^2 + 3 x - 1 (a0 = -1 => D = 1, Archimedean Unit Branch!)
+    info_unit = order3_global_local_dichotomy(b2=-2, b1=3, b0=-1)
+    print(f"* Order-3 SODA 2026 (x^3 - 2x^2 + 3x - 1): branch={info_unit['branch']}, D={info_unit['D']}, Smyth gap >= {info_unit['smyth_lower_bound_gap']}")
+    assert info_unit["branch"] == "ARCHIMEDEAN_UNIT_BRANCH" and info_unit["D"] == 1
+
+    # 2. Order-3 Non-Archimedean Newton-Polygon example: (x - 5)(x - 3)(x - 1) = x^3 - 9x^2 + 23x - 15
+    info_newton = order3_global_local_dichotomy(b2=-9, b1=23, b0=-15)
+    print(f"* Order-3 (x-5)(x-3)(x-1) (x^3 - 9x^2 + 23x - 15): branch={info_newton['branch']}, D={info_newton['D']}, D_unit={info_newton['D_unit']}")
+    assert info_newton["branch"] == "NON_ARCHIMEDEAN_NEWTON_BRANCH" and info_newton["D_unit"] == 15
+
+    # Verify factorization-free D^nu test certifies u_6 != 0 on u_n = 2*5^n - 3^n - 1 (even when Pisano moduli fail!)
+    lrs_pisano = LinearRecurrenceSequence(coeffs=[15, -23, 9], initial=[0, 6, 40])
+    verdict_n6 = factorization_free_D_nu_zero_test(lrs_pisano, n=6)
+    print(f"    Factorization-free D^nu test at Pisano adversarial index n* = 6: {verdict_n6} (expected False => u_6 != 0)")
+    assert verdict_n6 is False
+
+    # 3. Order-4 Non-Archimedean Slope-<=2 example: x^4 - 3x^3 + 2x^2 - 6x + 12 (gcd(b0, b1) = 6, gcd(b2, b3) = 1 => D_{<=2} = 6)
+    info4 = order4_global_local_dichotomy(b3=-3, b2=2, b1=-6, b0=12)
+    print(f"* Order-4 (x^4 - 3x^3 + 2x^2 - 6x + 12): branch={info4['branch']}, D={info4['D']}, D_le_2={info4['D_le_2']}")
+    assert info4["branch"] == "NON_ARCHIMEDEAN_SLOPE_LE_2_BRANCH" and info4["D_le_2"] == 6
+    print("Global-local dichotomy (Theorems 3 & 4) verified!\n")
+
+
 if __name__ == "__main__":
     run_obstruction_b1_demo()
     run_obstruction_b2_demo()
     run_deterministic_solver_benchmarks()
+    run_global_local_dichotomy_demo()

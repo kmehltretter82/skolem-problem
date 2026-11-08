@@ -8,9 +8,14 @@ from src.deterministic_zero_test import (
     DyadicInterval,
     construct_ghost_root_counterexamples,
     construct_pisano_counterexample,
+    coprime_base,
     dyadic_interval_zero_test,
+    factorization_free_D_nu_zero_test,
     hensel_depth_extension_test,
     interval_eval_term,
+    normalize_newton_polygon_coeffs,
+    order3_global_local_dichotomy,
+    order4_global_local_dichotomy,
     single_prime_power_zero_test,
     solve_bounded_skolem_deterministic,
 )
@@ -82,6 +87,30 @@ class TestSkolemAlgorithm(unittest.TestCase):
         self.assertEqual(APs, [])
         self.assertIn(4, raw_cands)
         self.assertEqual(verified, [4])
+
+    def test_theorems_3_and_4_global_local_dichotomy(self) -> None:
+        # Coprime-base normalization on [b2=16, b1=16, b0=64] -> S=4, hat_b=[4, 1, 1]
+        S, hat_b = normalize_newton_polygon_coeffs([16, 16, 64])
+        self.assertEqual(S, 4)
+        self.assertEqual(hat_b, [4, 1, 1])
+
+        # Theorem 3 Archimedean unit branch (D = 1)
+        info_unit = order3_global_local_dichotomy(b2=-2, b1=3, b0=-1)
+        self.assertEqual(info_unit["branch"], "ARCHIMEDEAN_UNIT_BRANCH")
+        self.assertEqual(info_unit["D"], 1)
+
+        # Theorem 3 Non-Archimedean Newton-polygon branch (D > 1) + factorization-free D^nu test
+        info_newton = order3_global_local_dichotomy(b2=-9, b1=23, b0=-15)
+        self.assertEqual(info_newton["branch"], "NON_ARCHIMEDEAN_NEWTON_BRANCH")
+        self.assertEqual(info_newton["D_unit"], 15)
+        lrs_pisano = LinearRecurrenceSequence(coeffs=[15, -23, 9], initial=[0, 6, 40])
+        self.assertIs(factorization_free_D_nu_zero_test(lrs_pisano, n=6), False)
+        self.assertIs(factorization_free_D_nu_zero_test(lrs_pisano, n=0), True)
+
+        # Theorem 4 Order-4 slope-<=2 branch
+        info4 = order4_global_local_dichotomy(b3=-3, b2=2, b1=-6, b0=12)
+        self.assertEqual(info4["branch"], "NON_ARCHIMEDEAN_SLOPE_LE_2_BRANCH")
+        self.assertEqual(info4["D_le_2"], 6)
 
 
 if __name__ == "__main__":

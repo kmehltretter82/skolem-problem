@@ -209,4 +209,89 @@ theorem soda2026_ghost_root_verified :
     soda2026Seq 19 ≠ 0 := by
   decide
 
+/-! ## 5. Theorems 3 & 4: Closing the Transition Window via Global-Local Dichotomy -/
+
+/--
+**Theorem 3A (Order-3 Smyth Mahler-Measure Consecutive Spectral Gap):**
+In the Archimedean Unit Branch (`D = 1`) at Order 3, the root-cube ratios `ξ_i = μ_i^3 / (-b_0)`
+are algebraic units whose log-Mahler measure `log_M` satisfies `log_M ≤ 2 * (L_1 - L_3)`
+and Smyth's bound `γ_smyth ≤ log_M`. Then at least one of the two consecutive Archimedean
+spectral gaps `L_1 - L_2` or `L_2 - L_3` is at least `γ_smyth / 4`.
+-/
+theorem smyth_mahler_measure_consecutive_gap_order3
+    (L_1 L_2 L_3 log_M γ_smyth : ℤ)
+    (h_mahler : log_M ≤ 2 * (L_1 - L_3))
+    (h_smyth : γ_smyth ≤ log_M) :
+    γ_smyth ≤ 4 * (L_1 - L_2) ∨ γ_smyth ≤ 4 * (L_2 - L_3) := by
+  omega
+
+/--
+**Theorem 4A (Order-4 Smyth Mahler-Measure Consecutive Spectral Gap):**
+In the Archimedean Unit Branch (`D = 1`) at Order 4, the root-fourth-power ratios
+`ξ_i = μ_i^4 / b_0` are algebraic units whose log-Mahler measure `log_M` satisfies
+`log_M ≤ 4 * (L_1 - L_4)` and `γ_smyth ≤ log_M`. Then at least one of the three consecutive
+Archimedean spectral gaps `L_1 - L_2`, `L_2 - L_3`, or `L_3 - L_4` is at least `γ_smyth / 12`.
+-/
+theorem smyth_mahler_measure_consecutive_gap_order4
+    (L_1 L_2 L_3 L_4 log_M γ_smyth : ℤ)
+    (h_mahler : log_M ≤ 4 * (L_1 - L_4))
+    (h_smyth : γ_smyth ≤ log_M) :
+    γ_smyth ≤ 12 * (L_1 - L_2) ∨ γ_smyth ≤ 12 * (L_2 - L_3) ∨ γ_smyth ≤ 12 * (L_3 - L_4) := by
+  omega
+
+/--
+**Theorem 3B / 4B (Factorization-Free Composite Modulus Zero Test):**
+Suppose `D` is the explicit rational denominator of the root-power polynomial `P_ξ(t)` (or `D_{≤2}`
+at Order 4), and there exists an (unknown) prime factor `q ∣ D` at which the `q`-adic Newton
+polygon has `k_q ≤ 2` dominant roots of valuation `0`, so Yu's `p`-adic Baker bound guarantees
+`¬ ((q : ℤ) ^ ν ∣ u m)` for all `m ≤ N` with `u m ≠ 0`.
+Then testing `u n` modulo the unfactored composite power `(D : ℤ) ^ ν` is exact:
+`u n = 0 ↔ (D : ℤ) ^ ν ∣ u n`.
+-/
+theorem factorization_free_composite_power_test_iff
+    (u : ℕ → ℤ) (D q ν N n : ℕ)
+    (hq_dvd_D : q ∣ D)
+    (h_yu_padic : ∀ m ≤ N, u m ≠ 0 → ¬ ((q : ℤ) ^ ν ∣ u m))
+    (hn : n ≤ N) :
+    u n = 0 ↔ (D : ℤ) ^ ν ∣ u n := by
+  constructor
+  · intro hz
+    rw [hz]
+    exact dvd_zero ((D : ℤ) ^ ν)
+  · intro hD_dvd
+    by_contra hne
+    have hqZ : (q : ℤ) ∣ (D : ℤ) := Int.ofNat_dvd.mpr hq_dvd_D
+    have hq_pow : (q : ℤ) ^ ν ∣ (D : ℤ) ^ ν := pow_dvd_pow_of_dvd hqZ ν
+    exact h_yu_padic n hn hne (dvd_trans hq_pow hD_dvd)
+
+/--
+**Theorem 3 (Combined Global-Local Dichotomy Soundness at Order 3):**
+For any candidate `n ≤ N` of a normalized Order-3 LRS `u`:
+- Either `D = 1` (Archimedean Unit Branch), where for every `u n ≠ 0` the dyadic interval enclosure
+  `I` separates `u n` from `0` (`0 < I.lo ∨ I.hi < 0`), or
+- `D > 1` (Non-Archimedean Newton-Polygon Branch), where some prime `q ∣ D` satisfies Yu's bound
+  `u n ≠ 0 → ¬ ((q : ℤ) ^ ν ∣ u n)`.
+Then `u n = 0` if and only if BOTH `I.contains 0` AND `(D : ℤ) ^ ν ∣ u n`.
+-/
+theorem order3_global_local_dichotomy_iff
+    (u : ℕ → ℤ) (D ν N n : ℕ) (I : DyadicInterval)
+    (h_enc : I.contains (u n))
+    (h_dichotomy :
+      (D = 1 ∧ (u n ≠ 0 → (0 < I.lo ∨ I.hi < 0))) ∨
+      (D > 1 ∧ ∃ q, q ∣ D ∧ (∀ m ≤ N, u m ≠ 0 → ¬ ((q : ℤ) ^ ν ∣ u m))))
+    (hn : n ≤ N) :
+    u n = 0 ↔ (I.lo ≤ 0 ∧ 0 ≤ I.hi ∧ (D : ℤ) ^ ν ∣ u n) := by
+  constructor
+  · intro hz
+    have h0 : I.contains 0 := by rwa [← hz]
+    rw [DyadicInterval.contains_zero_iff] at h0
+    refine ⟨h0.1, h0.2, ?_⟩
+    rw [hz]
+    exact dvd_zero ((D : ℤ) ^ ν)
+  · rintro ⟨hlo, hhi, hD⟩
+    rcases h_dichotomy with ⟨_hD1, h_arch⟩ | ⟨_hDgt, q, hqD, h_yu⟩
+    · by_contra hne
+      rcases h_arch hne with hpos | hneg <;> omega
+    · exact (factorization_free_composite_power_test_iff u D q ν N n hqD h_yu hn).mpr hD
+
 end Skolem

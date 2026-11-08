@@ -9,6 +9,7 @@ In this note we address Deliverables 3 and 4 of `idea.txt`:
 - **Part II (Counterexamples & Obstructions to Plausible Modulus-Selection Rules):** We formulate two natural deterministic modulus-selection / $p$-adic precision rules and prove **explicit counterexample obstructions** showing why they fail on general Order-$3$ and Order-$4$ instances:
   1. **Obstruction 1 (Pisano-Period Defeat of Oblivious Polynomial Modulus Sets):** Any rule that tests $u_n \equiv 0 \pmod m$ over a polynomial-bit-length set of moduli $S$ coprime to $a_0$ (without enforcing $p$-adic disc uniqueness $N < M p^R$) is defeated by an explicit binary index $n = \mathrm{lcm}_{m \in S} \mathrm{ord}_m(A)$ of bit-length $\le d \sum_{m \in S} \log_2 m$ where $u_n \ne 0$ yet $u_n \equiv 0 \pmod m$ for all $m \in S$.
   2. **Obstruction 2 ($p$-adic Ghost-Root Defeat of Single-Prime and Multi-Prime Hensel Filtering at Order $d \ge 3$):** For order $d \ge 3$ with $\ge 3$ distinct roots, the Mahler interpolant $F_\ell(x)$ can possess a non-integer $p$-adic root $x_0 \in \mathbb{Z}_p \setminus \mathbb{N}$ ("ghost root"). Truncating $x_0$ at any depth $R$ yields a valid `ZeroSearch` candidate $n_R = M(x_0 \bmod p^R) + \ell$ with $v_p(u_{n_R}) \ge V(F_\ell) + R$ and $u_{n_R} \ne 0$.
+- **Part IV (Revised: Zero Bounds from a Global–Local Dichotomy):** Every covered branch yields an explicit polynomial **bound on the largest zero**, which makes candidate testing trivial. The unit-root branch $k_q = 1$ (Theorems 5 & 6) is proved in Lean **with no external hypotheses** and works for unfactored composite $q$. The remaining order-3/4 obstacle is a single class: three-term clusters with no 1- or 2-term split at any usable place.
 - **Part III (The Exact Remaining Open Barrier at Order $d \in \{3, 4\}$):** We isolate the precise "Archimedean transition window" where neither Lemma 1 nor Lemma 2 immediately runs in polynomial time, providing a sharp target for complete derandomization of Order-$\le 4$ Skolem.
 
 ---
@@ -176,88 +177,95 @@ Combining **Lemmas 1–2** with **Obstructions 1–2** gives a sharp structural 
 
 ---
 
-## Part IV: Closing the Transition Window via Root-Power Unit Polynomials, Smyth's Theorem, and Factorization-Free $D^\nu$ Modular Testing
+## Part IV: Zero Bounds from a Global–Local Dichotomy (Revised)
 
-We now attack the Archimedean transition window at Orders $d = 3$ and $d = 4$ by combining **Archimedean Mahler-measure bounds (Smyth's Theorem)** with **non-Archimedean Newton-polygon valuation bounds (Yu's $p$-adic Baker Theorem)** and **Bernstein's deterministic polynomial-time Coprime Base Normalization**.
+> [!NOTE]
+> **Revision (Nov 2026).** An earlier version of this part described each branch as a *modular zero test* `u_n ≡ 0 (mod D^ν)`. An external review pointed out (with the example `u_n = Dⁿ`) that a vanishing residue proves nothing unless a separate precision theorem bounds `v_q(u_n)` for nonzero `u_n`. Looking at the branches again, every argument we have proves something **stronger and simpler**: an explicit **bound on the largest zero**,
+> $$u_k \ne 0 \quad \text{for all } k \ge B(\boldsymbol{u}),\qquad B(\boldsymbol{u}) = \mathrm{poly}(\|\boldsymbol{u}\|).$$
+> Given such a bound, the deterministic test for a `ZeroSearch` candidate `n` is trivial: if `n ≥ B`, answer *nonzero*; otherwise compute `u_n` exactly (it has `poly(‖u‖)` bits). Neither the `D^ν` modular test nor interval arithmetic is needed. The Lean theorem `factorization_free_composite_power_test_iff` is kept for history but is superseded by Theorems 5 and 6 below.
 
-The key insight is a **global-local dichotomy across all places of the splitting field $K$**:
-- At any **non-Archimedean** place $\mathfrak{q} \mid q$ where not all roots have equal valuation, the valuation $v_{\mathfrak{q}}(\lambda_i) \in \mathbb{Z}_{\ge 0}$ is a **discrete integer**, so the gap between dominant and subdominant valuations is at least $1$:
-  $$v_{\mathfrak{q}}(\lambda_{k_{\mathfrak{q}}+1}) - v_{\mathfrak{q}}(\lambda_1) \ge 1 \implies \delta_{\mathfrak{q}} = \log\frac{|\lambda_1|_{\mathfrak{q}}}{|\lambda_{k_{\mathfrak{q}}+1}|_{\mathfrak{q}}} \ge \frac{\log q}{e(\mathfrak{q}\mid q)} \ge \frac{\log 2}{d!}.$$
-  **There is NO small spectral gap and NO transition window at a non-Archimedean place!**
-- Conversely, if **every** non-Archimedean place $\mathfrak{q}$ is equi-valued ($v_{\mathfrak{q}}(\lambda_1) = \dots = v_{\mathfrak{q}}(\lambda_d)$ for all $\mathfrak{q}$), then the root-power ratios $\xi_i := \lambda_i^d / ((-1)^d a_0)$ have valuation $0$ at every prime ideal $\mathfrak{q}$ and are therefore **algebraic units** $\xi_i \in \mathcal{O}_K^\times$ of degree $\le d$ over $\mathbb{Q}$. By **Smyth's Theorem (1971)** on the minimum Mahler measure of non-cyclotomic algebraic integers of degree $\le 4$, the **Archimedean** spectral gap is bounded below by an **absolute universal constant** $\Omega(1)$ independent of the height $\|\boldsymbol{u}\|$!
+Throughout, `v_k = u_{L_d M k + r}` is a non-degenerate subsequence of order `d ∈ {3,4}` produced by `ZeroSearch` ($L_3 = 6$, $L_4 = 12$, so all Newton-polygon slopes are integers). It has characteristic polynomial $\chi(x) = x^d + b_{d-1}x^{d-1} + \dots + b_0 \in \mathbb{Z}[x]$, and `s = d` active roots (fewer roots fall under Lemma 1).
 
----
+### 4.0 Status legend
 
-### 4.1 Theorem 3: Complete Elimination of the Transition Window at Order $d = 3$
+| Label | Meaning |
+|---|---|
+| **[Lean]** | Proved in Lean 4 with no external hypotheses (`#print axioms` reports only `propext`, `Classical.choice`, `Quot.sound`). |
+| **[Paper: Smyth + Baker]** | Pen-and-paper argument using Smyth's/Boyd's Mahler-measure bounds and Archimedean linear forms in **two** logarithms (Baker–Wüstholz / Matveev). Not formalized. |
+| **[Paper: Yu]** | Uses Yu's $p$-adic linear forms in two logarithms. The constant grows like $q^f$, so the bound is polynomial only for $q \le \mathrm{poly}(\|\boldsymbol{u}\|)$. |
+| **[Open]** | No polynomial zero bound is known to us. |
 
-Let $v_k = u_{6 M k + r}$ be any non-identically-zero, non-degenerate subsequence of an Order-3 integer LRS (where the step $6M$ ensures both non-degeneracy via $A^M \equiv I \pmod p$ and integer Newton-polygon slopes since $\mathrm{lcm}(1, 2, 3) = 6$). Let $\tilde{A} = A^{6M}$ have characteristic polynomial
-$$\chi_{\tilde{A}}(x) = x^3 + b_2 x^2 + b_1 x + b_0 \in \mathbb{Z}[x] \qquad (b_0 \ne 0),$$
-with roots $\mu_1, \mu_2, \mu_3 \in \mathcal{O}_K$. (If the $3 \times 3$ Hankel matrix of $(v_0, \dots, v_5)$ has rank $\le 2$ or if $\Delta(\chi_{\tilde{A}}) = 0$, then $v_k$ has $s \le 2$ distinct active roots and is already decided in deterministic polynomial time by **Lemma 1**.)
+> [!WARNING]
+> **Novelty is not yet established.** We have not yet compared these zero bounds with the literature on the largest zero of ternary/quaternary recurrences (Mignotte–Shorey–Tijdeman, Beukers, Schlickewei–Schmidt, and later work). Some of the Archimedean statements may be known.
 
-#### Step 1: Deterministic Coprime-Base Slope Normalization
-Because $\mu_i = \lambda_i^{6M}$ are $6$th powers of the roots of a degree-3 polynomial in $\mathbb{Z}[x]$, every slope of the $q$-adic Newton polygon of $\chi_{\tilde{A}}(x)$ at every prime $q$ is a **non-negative integer**:
-$$\kappa_q := \min_{i \in \{1, 2, 3\}} v_q(\mu_i) = \min\!\left(v_q(b_2),\; \left\lfloor \frac{v_q(b_1)}{2} \right\rfloor,\; \left\lfloor \frac{v_q(b_0)}{3} \right\rfloor\right) \in \mathbb{Z}_{\ge 0}.$$
-Using **Bernstein's deterministic polynomial-time Coprime Base Algorithm** on the finite set $\{|b_2|, |b_1|, |b_0|\}$ (which runs in $O(\|\boldsymbol{u}\| (\log \|\boldsymbol{u}\|)^2)$ time using only `gcd` and exact division, without factoring!), we obtain pairwise coprime integers $\{c_1, \dots, c_t\}$ and define the exact integer scale factor:
-$$S := \prod_{j=1}^t c_j^{\min\big(v_{c_j}(b_2),\; \lfloor v_{c_j}(b_1)/2 \rfloor,\; \lfloor v_{c_j}(b_0)/3 \rfloor\big)} \in \mathbb{Z}_{\ge 1}.$$
-Then the rescaled coefficients
-$$\hat{b}_2 := \frac{b_2}{S} \in \mathbb{Z}, \qquad \hat{b}_1 := \frac{b_1}{S^2} \in \mathbb{Z}, \qquad \hat{b}_0 := \frac{b_0}{S^3} \in \mathbb{Z}$$
-define the integer companion matrix $\hat{A} = \frac{1}{S}\mathrm{diag}(S^2, S, 1) \tilde{A} \mathrm{diag}(S^{-2}, S^{-1}, 1) \in \mathbb{Z}^{3 \times 3}$ with eigenvalues $\hat{\mu}_i = \mu_i / S$ satisfying $v_k = 0 \iff \hat{v}_k = 0$.
+### 4.1 Normalization (corrected)
 
-#### Step 2: The Root-Cube Unit Polynomial $P_\xi(t)$ and Denominator $D$
-Define the root-cube ratios $\xi_i := \frac{\hat{\mu}_i^3}{-\hat{b}_0}$ ($i = 1, 2, 3$). By Newton's symmetric power sums, the monic cubic polynomial $P_\xi(t) = (t - \xi_1)(t - \xi_2)(t - \xi_3)$ is given explicitly in $O(1)$ arithmetic operations by:
-$$P_\xi(t) = t^3 - (3 + r_1) t^2 + (3 + r_2) t - 1 \in \mathbb{Q}[t],$$
-where:
-$$r_1 := \frac{\hat{b}_2(\hat{b}_2^2 - 3 \hat{b}_1)}{\hat{b}_0} = \frac{N_1}{D_1}, \qquad r_2 := \frac{\hat{b}_1(\hat{b}_1^2 - 3 \hat{b}_0 \hat{b}_2)}{\hat{b}_0^2} = \frac{N_2}{D_2} \qquad (\gcd(N_i, D_i) = 1,\ D_i \ge 1).$$
-Let $D := \mathrm{lcm}(D_1, D_2) \in \mathbb{Z}_{\ge 1}$.
+Bernstein's coprime base of $\{|b_{d-1}|,\dots,|b_0|\}$, followed by `reduce_perfect_powers`, yields pairwise coprime integers $c_1,\dots,c_t$, **none of which is a perfect power**, with $|b_{d-r}| = \prod_j c_j^{e_{rj}}$. Set
+$$S = \prod_j c_j^{\,\min_r \lfloor e_{rj}/r \rfloor}, \qquad \hat{b}_{d-r} = b_{d-r}/S^r \in \mathbb{Z}.$$
+
+*Why this is correct prime by prime (it uses only genuine prime valuations).* For a prime $p \mid c_j$ we have $v_p(b_{d-r}) = e_{rj}\,v_p(c_j)$. The leftmost Newton slope $\kappa_p = \min_r v_p(b_{d-r})/r = v_p(c_j)\cdot \min_r e_{rj}/r$ is an integer for **every** $p \mid c_j$, because the roots are $L_d$-th powers. Write $\min_r e_{rj}/r = a/b$ in lowest terms. Then $b$ divides $v_p(c_j)$ for every $p \mid c_j$, so $b \mid \gcd_p v_p(c_j) = 1$, since $c_j$ is not a perfect power. Hence the minimum $\min_r e_{rj}/r$ is an integer, so it equals $\min_r \lfloor e_{rj}/r \rfloor$, and $v_p(S) = \kappa_p$. Without `reduce_perfect_powers` this step fails.
+
+*Normalized integer sequence (corrects the earlier "$v_k/\gcd(v_k, S^k)$", which was wrong).* Define $z_k := S^{\,d-1-k}\, v_k$. Dividing the recurrence by $S^{k+d}$ shows that $z_k$ satisfies the recurrence with coefficients $\hat{b}_i$. Its initial values $z_0,\dots,z_{d-1}$ are integers, so every $z_k$ is an integer, and $z_k = 0 \iff v_k = 0$. Its characteristic roots $\hat{\mu}_i = \mu_i/S$ satisfy $\min_i v_p(\hat{\mu}_i) = 0$ at every prime $p$.
+
+Define $\xi_i = \hat{\mu}_i^d / ((-1)^d \hat{b}_0)$, $P_\xi(t) = \prod_i (t - \xi_i) \in \mathbb{Q}[t]$, and let $D$ be the lcm of the denominators of its coefficients (explicit formulas in `order3_global_local_dichotomy` / `order4_global_local_dichotomy`). Then $D = 1$ iff all roots have equal valuation at every prime. For a prime $q \mid D$, let $k_q \in \{1,\dots,d-1\}$ be the length of the slope-0 segment, i.e. the number of $q$-adic unit roots.
+
+### 4.2 Theorem 5 / 6 — the unit-root branch $k_q = 1$ **[Lean]**
 
 > [!IMPORTANT]
-> **Theorem 3 (Unconditional Closing of the Order-3 Transition Window):**
-> Let $\hat{v}_k$ be a normalized non-degenerate Order-3 LRS with $s = 3$ active roots $\hat{\mu}_1, \hat{\mu}_2, \hat{\mu}_3$ ($|\hat{\mu}_1|_\infty \ge |\hat{\mu}_2|_\infty \ge |\hat{\mu}_3|_\infty > 0$), and let $D = \mathrm{lcm}(D_1, D_2)$ be the denominator of $P_\xi(t)$ above.
-> 1. **Archimedean Unit Branch ($D = 1$):**
->    If $D = 1$, then $P_\xi(t) \in \mathbb{Z}[t]$ is a monic integer polynomial with constant term $-1$, so $\xi_1, \xi_2, \xi_3$ are **algebraic units of degree $\le 3$**.
->    - Either $|\hat{\mu}_1|_\infty = |\hat{\mu}_2|_\infty = |\hat{\mu}_3|_\infty$ (equi-dominant at $\infty$, $B(k) \equiv 0$), OR
->    - $|\hat{\mu}_1|_\infty > |\hat{\mu}_3|_\infty$, in which case $\xi_1$ is a non-cyclotomic algebraic unit of degree $\le 3$ whose Mahler measure $M(\xi_1) = \prod_{i=1}^3 \max(1, |\xi_i|_\infty)$ satisfies **Smyth's bound** $M(\xi_1) \ge \theta_0 \approx 1.3247179572$ (where $\theta_0^3 - \theta_0 - 1 = 0$ is the plastic constant) and the elementary inequality:
->      $$\theta_0 \le M(\xi_1) = \max\!\left(\frac{|\hat{\mu}_1|_\infty^2}{|\hat{\mu}_2|_\infty |\hat{\mu}_3|_\infty},\; \frac{|\hat{\mu}_1|_\infty |\hat{\mu}_2|_\infty}{|\hat{\mu}_3|_\infty^2}\right) \le \left(\frac{|\hat{\mu}_1|_\infty}{|\hat{\mu}_3|_\infty}\right)^2.$$
->      Consequently, the maximum consecutive Archimedean spectral gap is bounded below by an **absolute universal constant**:
->      $$\max\!\left(\log\frac{|\hat{\mu}_1|_\infty}{|\hat{\mu}_2|_\infty},\; \log\frac{|\hat{\mu}_2|_\infty}{|\hat{\mu}_3|_\infty}\right) \ge \frac{1}{2}\log\frac{|\hat{\mu}_1|_\infty}{|\hat{\mu}_3|_\infty} \ge \frac{1}{4}\log \theta_0 > 0.0702997.$$
->      Because $d = 3$, any split at the larger of the two consecutive gaps puts at most $k_\infty \in \{1, 2\}$ roots into the dominant block $S_k$:
->      - **Case $k_\infty = 1$ ($\log(|\hat{\mu}_1|_\infty/|\hat{\mu}_2|_\infty) \ge 0.0702997$):** $S_k = c_1 \hat{\mu}_1^k$ is a single term and $|T_k| \le (|c_2|+|c_3|)|\hat{\mu}_1|_\infty^k e^{-0.0702997 k}$ decays exponentially without Baker's theorem.
->      - **Case $k_\infty = 2$ ($\log(|\hat{\mu}_1|_\infty/|\hat{\mu}_2|_\infty) < 0.0702997$ and $\log(|\hat{\mu}_2|_\infty/|\hat{\mu}_3|_\infty) \ge 0.0702997$):** This covers both a dominant complex-conjugate pair ($|\hat{\mu}_1|_\infty = |\hat{\mu}_2|_\infty > |\hat{\mu}_3|_\infty$) and totally-real unit cubics with two nearly equal dominant real roots, such as $f_N(x) = x(x-N)^2 - 1 = x^3 - 2Nx^2 + N^2 x - 1$ ($N \ge 3$), where $\hat{\mu}_{1,2} = N \pm N^{-1/2} + o(N^{-1/2})$ have $\log(\hat{\mu}_1/\hat{\mu}_2) \sim 2 N^{-3/2}$ while $\hat{\mu}_3 \sim N^{-2}$ has $\log(\hat{\mu}_2/\hat{\mu}_3) \sim 3 \log N \ge 0.0702997$. Grouping the top two roots into $S_k = c_1 \hat{\mu}_1^k + c_2 \hat{\mu}_2^k = c_2 \hat{\mu}_2^k \big((-c_1/c_2)(\hat{\mu}_1/\hat{\mu}_2)^k - 1\big)$ and setting $T_k = c_3 \hat{\mu}_3^k$, **Baker's Theorem on linear forms in two logarithms** (Survey Theorem 7) bounds $|(-c_1/c_2)(\hat{\mu}_1/\hat{\mu}_2)^k - 1| \ge \exp(-C(\|\boldsymbol{u}\|)\log k)$ in terms of the **global logarithmic Weil height** $h(\hat{\mu}_1/\hat{\mu}_2) = \Theta(\|\boldsymbol{u}\|)$ (which is bounded below by Voutier/Dobrowolski's universal constant in degree $\le 6$, e.g., $h(\hat{\mu}_1/\hat{\mu}_2) \ge \frac{1}{6}\log(\hat{\mu}_1/\hat{\mu}_3) \approx \frac{1}{2}\log N$ for $f_N$), **independently of how small $|\hat{\mu}_1/\hat{\mu}_2 - 1|_\infty$ is**! Meanwhile $|T_k / (c_2 \hat{\mu}_2^k)| \le |c_3/c_2| e^{-0.0702997 k}$, so $|S_k| > 2|T_k|$ for all $k > B_{\text{small}}(\|\boldsymbol{u}\|) = \mathrm{poly}(\|\boldsymbol{u}\|)$.
->      Thus **Lemma 2's $P$-bit dyadic interval evaluation** certifies $\hat{v}_k = 0$ vs. $\hat{v}_k \ne 0$ in deterministic polynomial time with **zero transition window**!
-> 2. **Non-Archimedean Newton-Polygon Branch ($D > 1$):**
->    If $D > 1$, then for **every** prime $q \mid D$, at least one of $v_q(r_1) < 0$ or $v_q(r_2) < 0$ holds, so the $q$-adic Newton polygon of $x^3 + \hat{b}_2 x^2 + \hat{b}_1 x + \hat{b}_0$ has at least two distinct slopes. By Step 1's normalization, its leftmost slope is $v_q(\hat{\mu}_1) = 0$ with horizontal multiplicity $k_q \in \{1, 2\}$, while the remaining $3 - k_q$ root(s) have $q$-adic valuation $\ge 1$.
->    This splits into two sub-regimes according to $k_q$:
->    - **Sub-branch 2a ($k_q = 1$, Baker-Free Liouville Regime):** We have $k_q = 1 \iff q \mid \gcd(\hat{b}_0, \hat{b}_1)$ and $q \nmid \hat{b}_2$. Let $D_{k=1}$ be the part of $\gcd(\hat{b}_0, \hat{b}_1)$ coprime to $\hat{b}_2$. Whenever $D_{k=1} > 1$, every prime $q \mid D_{k=1}$ has a **unique** $q$-dominant root $\hat{\mu}_1$ of valuation $0$. Neither Archimedean nor $p$-adic Baker is needed: for all $k > O(\|\boldsymbol{u}\|)$, the ultrametric triangle inequality gives $v_q(\hat{v}_k) = v_q(c_1) = O(\|\boldsymbol{u}\|)$ **independently of the magnitude of $q$**, so $\hat{v}_k \equiv 0 \pmod{D_{k=1}^\nu}$ with $\nu = O(\|\boldsymbol{u}\|)$ runs in unconditional deterministic polynomial time!
->    - **Sub-branch 2b ($k_q = 2$, Yu $p$-adic Baker Regime):** When $D_{k=1} = 1$ and $D > 1$, every prime $q \mid D$ satisfies $q \mid \hat{b}_0$ and $q \nmid \hat{b}_1$, so $k_q = 2$ (two $q$-dominant roots of valuation $0$). By **Yu's $p$-adic Baker Theorem** at $\mathfrak{q} \mid q$ (Survey Theorem 8), for all $k > B_{\text{small}}(\|\boldsymbol{u}\|)$ with $\hat{v}_k \ne 0$:
->      $$v_q(\hat{v}_k) \le C_{\text{Yu}}(d, q) \cdot \|\boldsymbol{u}\|^2 \log k, \qquad \text{where } C_{\text{Yu}}(d, q) = O\!\left(\frac{q^{f(\mathfrak{q}\mid q)}}{(\log q)^3}\right).$$
->      Whenever $D$ has a prime factor $q \le \mathrm{poly}(\|\boldsymbol{u}\|, \log k)$ (or in the parameterized setting where $A$ is fixed and $N \to \infty$), $\nu > C_{\text{Yu}}(d, q)\|\boldsymbol{u}\|^2 \log k$ is polynomial, and the factorization-free test $\hat{v}_k \equiv 0 \pmod{D^\nu}$ runs in deterministic polynomial time.
->    - **Exact Remaining Barrier at Order 3:** Only when $D > 1$, $D_{k=1} = 1$ ($k_q = 2$ for all $q \mid D$), **every** prime factor $q \mid D$ is exponentially large ($q = 2^{\Omega(\|\boldsymbol{u}\|)}$, making $q^f$ in Yu's bound exponential in $\|\boldsymbol{u}\|$), **and** the Archimedean spectral gap $\delta_\infty$ is simultaneously $2^{-\Omega(\|\boldsymbol{u}\|)}$.
+> **Theorem 5 (Order 3) / Theorem 6 (Order 4)** — `Skolem/UnitRootDominance.lean`: `order3_unit_root_zero_bound`, `order4_unit_root_zero_bound`.
+> Let $u$ be an integer recurrence with characteristic polynomial $\chi(x) = x^d + b_{d-1}x^{d-1} + \dots + b_0$. Let $q \in \mathbb{Z}$ be **any** integer, prime or composite (it is never factored). Suppose $\mu, s_0, \dots, s_{d-2} \in \mathbb{Z}$ and $m \in \mathbb{N}$ satisfy
+> $$\chi(x) \equiv (x-\mu)\big(x^{d-1} + s_{d-2}x^{d-2} + \dots + s_0\big) \pmod{q^{m+1}}, \qquad q \mid s_i,\qquad \gcd(\mu, q) = 1,$$
+> and that $q^m \mid w_0$ but $q^{m+1} \nmid w_0$, where $w_0 = u_{d-1} + \sum_i s_i u_i$. Then
+> $$q^{m+1} \nmid u_k \quad\text{and hence}\quad u_k \ne 0 \qquad \text{for every } k \ge (d-1)(m+1).$$
 
----
+*Proof idea (entirely elementary).* Set $w_k = u_{k+d-1} + \sum_i s_i u_{k+i}$. The factorization gives $w_{k+1} \equiv \mu w_k \pmod{q^{m+1}}$. Since $\mu$ is a unit mod $q$, the $q$-order of $w_k$ stays frozen at exactly $m$ (`unit_ratio_order_frozen`). Meanwhile $u_{k+d-1} = w_k - \sum_i s_i u_{k+i}$ with every $q \mid s_i$. So the power of $q$ dividing a window of $d-1$ consecutive terms rises by one every $d-1$ steps until it reaches $m$. After that the frozen $w$ decides the $q$-order of every later term (`window_climb_zero_bound`). Only divisibility and $\gcd(\mu,q)=1$ are used, so the fact that $\mathrm{ord}_q$ is not a valuation for composite $q$ does no harm.
 
-### 4.2 Theorem 4: Extension to Order $d = 4$ (Newton-Polygon / Mahler-Measure Dichotomy)
+**When does a certificate exist, and how large is $m$?** The certificate exists exactly when $q \mid b_0,\dots,b_{d-2}$ and $\gcd(b_{d-1}, q) = 1$. The largest such $q$ is computed without factoring as $q = \mathrm{Strip}(\gcd(b_0,\dots,b_{d-2}),\, b_{d-1})$; on the normalized coefficients this is $D_{k=1}$.
 
-For a non-degenerate Order-4 integer LRS $u_n$ with $s = 4$ active roots, taking the subsequence step $12 M$ ($\mathrm{lcm}(1, 2, 3, 4) = 12$) and applying Bernstein's Coprime Base Normalization to $\chi_{\tilde{A}}(x) = x^4 + b_3 x^3 + b_2 x^2 + b_1 x + b_0$ yields normalized integer coefficients $(\hat{b}_3, \hat{b}_2, \hat{b}_1, \hat{b}_0)$ and the degree-4 root-fourth-power polynomial $P_\xi(t) = \prod_{i=1}^4 (t - \hat{\mu}_i^4 / \hat{b}_0) = t^4 + r_3 t^3 + r_2 t^2 + r_1 t + 1 \in \mathbb{Q}[t]$ with denominator $D = \mathrm{lcm}(\mathrm{denom}(r_1), \mathrm{denom}(r_2), \mathrm{denom}(r_3))$.
+The root $\mu \equiv -b_{d-1}$ is simple mod $q$, because $\chi'(\mu) \equiv \mu^{d-1}$ is a unit. So Newton/Hensel lifting modulo $q^{m+1}$ works for composite $q$, and synthetic division then gives the $s_i$ (`src/deterministic_zero_test.py :: unit_root_certificate`). The $q$-adic limit of $w_0$ equals the unit-root coefficient times a nonzero algebraic factor. Hence $m$ is finite iff that coefficient is nonzero, and then $m = O(\mathrm{poly}(\|\boldsymbol{u}\|)/\log q)$. If the coefficient is zero, $u$ satisfies a recurrence of order $d-1$ and falls to a lower case.
 
-> [!TIP]
-> **Theorem 4 (Order-4 Global-Local Dichotomy & $D_{\le 2}^\nu$ Factorization-Free Test):**
-> 1. **Archimedean Unit Branch ($D = 1$):**
->    If $D = 1$, then $\xi_i = \hat{\mu}_i^4 / \hat{b}_0$ are algebraic units of degree $\le 4$ over $\mathbb{Q}$, and $|\hat{\mu}_i / \hat{\mu}_j|_{\mathfrak{q}} = 1$ at every non-Archimedean place $\mathfrak{q}$. By **Kronecker's Theorem** and non-degeneracy (as in Lemma 24 of the 2026 Survey), it is impossible for $|\hat{\mu}_1|_\infty = |\hat{\mu}_2|_\infty = |\hat{\mu}_3|_\infty = |\hat{\mu}_4|_\infty$ to hold when $D = 1$. Thus $|\hat{\mu}_1|_\infty > |\hat{\mu}_4|_\infty$, and $\xi_1$ is a non-cyclotomic algebraic unit of fixed degree $d_\xi = [\mathbb{Q}(\xi_1):\mathbb{Q}] \le 4$.
->    Even when $P_\xi(t)$ is **reciprocal**, the minimum Mahler measure over **all** non-cyclotomic algebraic integers of degree $\le 4$ is bounded below by $\theta_0 \approx 1.324718$:
->    - If $\xi_1$ is non-reciprocal, **Smyth's Theorem (1971)** gives $M(\xi_1) \ge \theta_0 \approx 1.3247179572$.
->    - If $\xi_1$ is reciprocal of degree $2$, $M(\xi_1) \ge \varphi = \frac{1+\sqrt{5}}{2} \approx 1.6180339887 > \theta_0$.
->    - If $\xi_1$ is reciprocal of degree $4$ (a degree-4 Salem number), its Mahler measure is at least the root of $x^4 - x^3 - x^2 - x + 1$ (Boyd 1980), $\lambda_{\text{Salem},4} \approx 1.7220838057 > \theta_0$.
->    Therefore, across all non-cyclotomic algebraic units of degree $\le 4$:
->    $$\theta_0 \le M(\xi_1) \le \left(\frac{|\hat{\mu}_1|_\infty}{|\hat{\mu}_4|_\infty}\right)^4 \implies \max_{1 \le j \le 3} \log\frac{|\hat{\mu}_j|_\infty}{|\hat{\mu}_{j+1}|_\infty} \ge \frac{1}{12}\log \theta_0 > 0.023433.$$
->    - Whenever the gap $\ge 0.023433$ occurs at $j = 1$ ($k_\infty = 1$) or $j = 2$ ($k_\infty = 2$, covering a dominant real root, a dominant complex-conjugate pair, or two dominant real roots separated from the other two roots), the 1-term or 2-term Baker bound closes the transition window unconditionally in deterministic polynomial time via **Lemma 2**.
->    - Only when $j = 3$ is the sole gap $\ge 0.023433$ while both $\log(|\hat{\mu}_1|_\infty/|\hat{\mu}_2|_\infty)$ and $\log(|\hat{\mu}_2|_\infty/|\hat{\mu}_3|_\infty)$ are $2^{-\Omega(\|\boldsymbol{u}\|)}$ (e.g., the 3-clustered quartic unit family $h_N(x) = x(x-N)^3 - 1$) does the dominant Archimedean block have $k_\infty = 3$ terms.
-> 2. **Non-Archimedean Slope-$\le 2$ Branch ($D_{\le 2} > 1$):**
->    At any prime $q \mid D$, the $q$-adic Newton polygon of $x^4 + \hat{b}_3 x^3 + \hat{b}_2 x^2 + \hat{b}_1 x + \hat{b}_0$ has leftmost slope $0$ of multiplicity $k_q \in \{1, 2, 3\}$, where:
->    - $k_q = 1 \iff q \mid \gcd(\hat{b}_0, \hat{b}_1, \hat{b}_2)$ and $q \nmid \hat{b}_3$ (captured without factoring by $D_{k=1} > 1$, which is completely Baker-free and independent of the size of $q$), and
->    - $k_q \in \{1, 2\} \iff q \mid \gcd(\hat{b}_0, \hat{b}_1)$ and $q \nmid \gcd(\hat{b}_2, \hat{b}_3)$ (captured without factoring by $D_{\le 2} > 1$).
->    Whenever $D_{k=1} > 1$, or $D_{\le 2}$ has a $\mathrm{poly}(\|\boldsymbol{u}\|)$-bounded prime factor (via Yu's $p$-adic Baker bound), the **factorization-free modular test** $\hat{v}_k \equiv 0 \pmod{D_{\le 2}^\nu}$ decides $\hat{v}_k = 0$ in deterministic polynomial time!
-> 3. **Remaining Residual Configurations at Order 4:**
->    The only Order-4 configurations not yet in unconditional deterministic $\mathsf{P}$ are the **3-dominant-root cluster regimes**:
->    - **Archimedean $k_\infty = 3$ cluster ($D = 1$):** three roots have nearly equal dominant modulus ($|\hat{\mu}_1|_\infty \approx |\hat{\mu}_2|_\infty \approx |\hat{\mu}_3|_\infty \gg |\hat{\mu}_4|_\infty$ with top two gaps $2^{-\Omega(\|\boldsymbol{u}\|)}$), or
->    - **Non-Archimedean $k_q = 3$ cluster ($D > 1, D_{\le 2} = 1$) / large-prime $k_q = 2$:** three roots tie for minimum $q$-adic valuation $0$ (or two roots tie at an exponentially large prime $q = 2^{\Omega(\|\boldsymbol{u}\|)}$) while the Archimedean gap is simultaneously $2^{-\Omega(\|\boldsymbol{u}\|)}$.
+**Verification.**
+- Lean: `lake build` succeeds. A concrete instance with composite $q = 15$ (`unitRootExample_no_late_zeros`: $x^3 - x^2 + 15x + 15$, $u = (0,0,1,\dots)$) proves $u_k \ne 0$ for **all** $k \ge 2$.
+- Python: on 3,077 random order-3/4 recurrences with a certificate (1,626 with composite $q$, 1,726 with $m > 0$, maximum $m = 12$), brute force found no zero and no $q^{m+1} \mid u_k$ beyond the bound (`experiments/unit_root_zero_bounds.py`).
 
+### 4.3 Theorem 3′ — Order 3, unit branch $D = 1$ **[Paper: Smyth + Baker]**
+
+If $D = 1$, the $\xi_i$ are algebraic units of degree $\le 3$ with $\xi_1\xi_2\xi_3 = 1$. Order the moduli as $|\hat{\mu}_1| \ge |\hat{\mu}_2| \ge |\hat{\mu}_3|$; equal moduli are covered by Lemma 2. Then
+$$\theta_0 \le M(\xi_1) \le M(P_\xi) = \max\!\Big(\tfrac{|\hat\mu_1|^2}{|\hat\mu_2||\hat\mu_3|},\ \tfrac{|\hat\mu_1||\hat\mu_2|}{|\hat\mu_3|^2}\Big) \le \Big(\tfrac{|\hat\mu_1|}{|\hat\mu_3|}\Big)^2.$$
+The left inequality uses Smyth for irreducible cubics, which are never reciprocal, and $M \ge \varphi$ for quadratic units. So the larger of the two consecutive gaps is at least $\tfrac14\log\theta_0 > 0.0703$. Split the roots at that gap:
+- **Single dominant root ($k_\infty = 1$):** one term dominates; there is no cancellation inside the block.
+- **Two dominant roots ($k_\infty = 2$):** a dominant complex pair, or two nearly equal real roots as in $x(x-N)^2 - 1$. Baker in two logarithms bounds $|c_1\hat\mu_1^k + c_2\hat\mu_2^k|$ from below in terms of the *Weil height* $h(\hat\mu_1/\hat\mu_2)$. That bound does not depend on how small $|\hat\mu_1/\hat\mu_2 - 1|_\infty$ is.
+
+Either way, **$u_k \ne 0$ for all $k > \mathrm{poly}(\|\boldsymbol{u}\|)$**. For a dominant complex pair the reviewer's direct computation gives the sharper constant $\delta \ge \tfrac12\log\theta_0 \approx 0.1406$. For totally real roots, Schinzel's bound for totally real units should improve the constant further.
+
+### 4.4 Order 3, $D > 1$
+
+Every $q \mid D$ has $k_q \in \{1, 2\}$.
+- **$D_{k=1} > 1$:** Theorem 5 **[Lean]**.
+- **$k_q = 2$ at some $q \le \mathrm{poly}(\|\boldsymbol{u}\|)$:** the two tied unit roots are controlled by Yu; the zero bound is $\mathrm{poly}(\|\boldsymbol{u}\|)\cdot q^f$ **[Paper: Yu]**.
+- **The largest Archimedean consecutive gap is $\ge 1/\mathrm{poly}(\|\boldsymbol{u}\|)$:** a 1- or 2-term Archimedean block plus two-log Baker gives a polynomial zero bound **[Paper: Baker]**.
+- **Residual [Open]:** all three moduli $|\hat\mu_i|$ lie within a superpolynomially small factor of each other, $D_{k=1} = 1$, and every prime $q \mid D$ is superpolynomially large.
+
+*Why Smyth cannot help here.* When $D > 1$ the $\xi_i$ are not algebraic integers, and nothing like Kronecker's theorem holds for non-integers: $(3+4i)/5$ has every conjugate exactly on the unit circle. Nearly equal moduli are therefore no longer ruled out by arithmetic.
+
+### 4.5 Order 4
+
+- **$D_{k=1} > 1$**, i.e. $q \mid \hat b_0, \hat b_1, \hat b_2$ and $\gcd(\hat b_3, q) = 1$: Theorem 6 **[Lean]**.
+- **$D = 1$:** by Kronecker and non-degeneracy, the four moduli are not all equal. $\xi_1$ is then a non-cyclotomic unit of degree $\le 4$, and $M(\xi_1) \ge \theta_0$: Smyth if it is non-reciprocal; $\varphi \approx 1.618$ for reciprocal quadratics; and, for reciprocal quartics, the smallest degree-4 Salem number $\approx 1.7221$, the root of $x^4 - x^3 - x^2 - x + 1$. Hence the largest of the three consecutive gaps is at least $\tfrac1{12}\log\theta_0 > 0.0234$. If that gap is at $j \in \{1, 2\}$, the dominant block has at most 2 roots, and we get a polynomial zero bound **[Paper: Smyth + Baker]**.
+- **$k_q \in \{1, 2\}$ at a small prime** ($D_{\le 2}$ has a prime factor $\le \mathrm{poly}$): **[Paper: Yu]**.
+
+### 4.6 The single remaining obstacle: three terms with no smaller split at any place **[Open]**
+
+Every order-3/4 case not covered above has the same shape. At **every** place that we can use efficiently, the dominant block contains at least three roots:
+- **Archimedean three-root cluster ($k_\infty = 3$).** Example: $h_N(x) = x(x-N)^3 - 1$, a quartic with unit roots and $D = 1$. Three of its roots are $N + N^{-1/3}\omega + o(N^{-1/3})$ with $\omega^3 = 1$: a real root of modulus $\approx N + N^{-1/3}$ and a complex pair of modulus $\approx N - \tfrac12 N^{-1/3}$. The fourth root is $\approx N^{-3}$. For large $N$ the gaps are $\approx 1.5N^{-4/3}$, $0$, and $\approx 4\log N$ (checked numerically for $N = 10, 100$), so the only large gap is at $j = 3$. This is exactly the classical hard order-3 configuration (a real root against a complex pair of nearly equal modulus), sitting inside an order-4 unit.
+- **$q$-adic three-root cluster ($k_q = 3$, order 4)**, or two tied roots at a superpolynomially large prime ($k_q = 2$), in both cases together with an Archimedean cluster.
+
+Closing this case needs either (a) a lower bound for a **three-term** exponential sum that is polynomial in the heights, rather than exponential in $1/\delta_\infty$, or (b) a $p$-adic two-logarithm bound without the $q^f$ factor. Option (b) is believed to be an artifact of current methods, but it is unproved. Turning the norm bound $v_q(Z) \le \log|N(Z)|/(f\log q)$ into an interpolation, which gets *stronger* as $q$ grows, is a natural first attempt. A crude estimate shows it falls short by a constant factor of order $[K:\mathbb{Q}]/(3f)$.
+
+### 4.7 Lean inventory for Part IV
+
+| Theorem | File | Assumptions |
+|---|---|---|
+| `order3_unit_root_zero_bound`, `order4_unit_root_zero_bound`, `order3_unit_root_mod_q`, `unitRootExample_no_late_zeros` | `Skolem/UnitRootDominance.lean` | **none** (standard axioms only) |
+| `smyth_mahler_measure_consecutive_gap_order3/4` | `Skolem/DeterministicZeroTest.lean` | Smyth's bound and the Mahler-measure inequality as hypotheses (the remaining step is linear arithmetic) |
+| `factorization_free_composite_power_test_iff`, `order3_global_local_dichotomy_iff` | `Skolem/DeterministicZeroTest.lean` | Baker/Yu-type precision bound as a hypothesis; **superseded** by the zero-bound formulation |

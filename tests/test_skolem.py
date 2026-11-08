@@ -18,6 +18,9 @@ from src.deterministic_zero_test import (
     order4_global_local_dichotomy,
     single_prime_power_zero_test,
     solve_bounded_skolem_deterministic,
+    unit_root_certificate,
+    check_unit_root_certificate,
+    unit_root_zero_bound_test,
 )
 from src.skolem_algorithm import LinearRecurrenceSequence
 
@@ -111,6 +114,43 @@ class TestSkolemAlgorithm(unittest.TestCase):
         info4 = order4_global_local_dichotomy(b3=-3, b2=2, b1=-6, b0=12)
         self.assertEqual(info4["branch"], "NON_ARCHIMEDEAN_SLOPE_LE_2_BRANCH")
         self.assertEqual(info4["D_le_2"], 6)
+
+    def test_theorems_5_and_6_unit_root_zero_bounds(self) -> None:
+        # Lean example `unitRootExampleSeq`: chi = x^3 - x^2 + 15x + 15, composite q = 15, m = 0
+        lrs = LinearRecurrenceSequence(coeffs=[-15, -15, 1], initial=[0, 0, 1])
+        cert = unit_root_certificate(lrs)
+        self.assertIsNotNone(cert)
+        self.assertEqual(cert["q"], 15)
+        self.assertEqual(cert["m"], 0)
+        self.assertEqual(cert["zero_bound"], 2)
+        self.assertTrue(check_unit_root_certificate(lrs, cert))
+        for k in range(2, 200):
+            self.assertNotEqual(lrs.term(k) % 15, 0)
+        self.assertIs(unit_root_zero_bound_test(lrs, 0), True)
+        self.assertIs(unit_root_zero_bound_test(lrs, 10**30), False)
+
+        # Higher precision m > 0 (requires Hensel lifting of mu modulo q^(m+1))
+        lrs_m = LinearRecurrenceSequence(coeffs=[-6, -6, 1], initial=[6, -6, 36])
+        cert_m = unit_root_certificate(lrs_m)
+        self.assertIsNotNone(cert_m)
+        self.assertGreater(cert_m["m"], 0)
+        self.assertTrue(check_unit_root_certificate(lrs_m, cert_m))
+        Q = cert_m["q"] ** (cert_m["m"] + 1)
+        for k in range(cert_m["zero_bound"], cert_m["zero_bound"] + 150):
+            self.assertNotEqual(lrs_m.term(k) % Q, 0)
+
+        # Order 4 (Theorem 6): chi = x^4 + 2x^3 + 10x^2 - 20x + 30, q = 10
+        lrs4 = LinearRecurrenceSequence(coeffs=[-30, 20, -10, -2], initial=[1, 0, 0, 0])
+        cert4 = unit_root_certificate(lrs4)
+        self.assertIsNotNone(cert4)
+        self.assertEqual(cert4["q"], 5)
+        Q4 = cert4["q"] ** (cert4["m"] + 1)
+        for k in range(cert4["zero_bound"], cert4["zero_bound"] + 150):
+            self.assertNotEqual(lrs4.term(k) % Q4, 0)
+
+        # No k_q = 1 modulus: q | b2 as well
+        self.assertIsNone(unit_root_certificate(
+            LinearRecurrenceSequence(coeffs=[-15, -15, 15], initial=[0, 0, 1])))
 
 
 if __name__ == "__main__":

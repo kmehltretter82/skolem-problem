@@ -33,6 +33,8 @@ Computational, number-theoretic, and formal investigation of the **Skolem Proble
      - [`Skolem/Mahler.lean`](Skolem/Mahler.lean): Proposition 2.4 (`prop_coef_to_mahler`), Cayley–Hamilton valuation/divisibility persistence (`dvd_of_linear_recurrence`, `eq_zero_of_linear_recurrence`, `valuation_ge_min_of_recurrence`), and Theorem 2.5's Legendre valuation cutoff (`thm_interpolate_valuation_strict_gt`, `thm_interpolate_index_le_d_sub_one`).
      - [`Skolem/ZeroSearch.lean`](Skolem/ZeroSearch.lean): Lemma 3.3 (`lem_min_coef_bound`), Proposition 3.4 (`prop_fast_disc_truncation_sound`), Corollary 3.5 (`disc_unique_integer_candidate`), Theorem 3.1 (`exists_zero_in_candidates_iff_prod_eq_zero`), and the Skolem–Mahler–Lech decomposition (`skolem_mahler_lech_decomposition`).
      - [`Skolem/DeterministicZeroTest.lean`](Skolem/DeterministicZeroTest.lean): Formalization of Lemma 1 (`single_prime_power_zero_test_iff`, `weil_height_zero_bound`), Lemma 2 (`DyadicInterval`, `dyadic_interval_certifies_nonzero`, `archimedean_separation_nonzero`), Obstruction Theorem B1 (`pisano_period_simultaneous_mod_zero`, `pisano_obstruction_order3_verified`), Obstruction Theorem B2 (`ghost_root_defeats_fixed_depth`, `soda2026_ghost_root_verified`), and Theorems 3–4 (`smyth_mahler_measure_consecutive_gap_order3`, `smyth_mahler_measure_consecutive_gap_order4`, `factorization_free_composite_power_test_iff`, `order3_global_local_dichotomy_iff`).
+     - [`Skolem/UnitRootDominance.lean`](Skolem/UnitRootDominance.lean): **Theorems 5 & 6 (unit-root zero bounds, no external hypotheses).** Suppose $\chi \equiv (x-\mu)\,g(x) \pmod{q^{m+1}}$, where every non-leading coefficient of $g$ is divisible by $q$ and $\gcd(\mu,q)=1$. Then $q^{m+1} \nmid u_k$, and so $u_k \ne 0$, for all $k \ge (d-1)(m+1)$ (`order3_unit_root_zero_bound`, `order4_unit_root_zero_bound`). Here $q$ may be an unfactored composite. A concrete instance with $q = 15$ is `unitRootExample_no_late_zeros`.
+   - **Axiom audit.** `#print axioms` on the Theorem 5/6 results reports only `propext`, `Classical.choice`, `Quot.sound`. The Theorems 3–4 statements in `DeterministicZeroTest.lean` take Smyth/Baker/Yu-type bounds as explicit hypotheses; see the inventory in [`notes/deterministic_zero_testing.md`](notes/deterministic_zero_testing.md) §4.7.
 
 ---
 
@@ -45,7 +47,8 @@ Computational, number-theoretic, and formal investigation of the **Skolem Proble
 │   ├── LRS.lean                            # Matrix-power LRS & Mahler binomial expansion (Thm 2.5)
 │   ├── Mahler.lean                         # Prop 2.4, Cayley-Hamilton persistence & Thm 2.5 degree bound
 │   ├── ZeroSearch.lean                     # Lemma 3.3, Prop 3.4, Cor 3.5, Thm 3.1 & Skolem-Mahler-Lech
-│   └── DeterministicZeroTest.lean          # Lemmas 1-2 & Obstruction Theorems B1-B2 + verified examples
+│   ├── DeterministicZeroTest.lean          # Lemmas 1-2 & Obstruction Theorems B1-B2 + verified examples
+│   └── UnitRootDominance.lean              # Theorems 5-6: unconditional k_q = 1 zero bounds (composite q OK)
 ├── notes/
 │   ├── dependency_graph.md                 # Theorem-by-theorem dependency graph of arXiv:2507.11234 & Survey
 │   ├── eqslp_structure.md                  # Deliverable 1: Structural characterization of EqSLP instances

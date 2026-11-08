@@ -683,3 +683,151 @@ def construct_ghost_root_counterexamples(
             "interval_certifies_nonzero": iv.strictly_nonzero(),
         })
     return results
+
+
+# ============================================================================
+# 7. Theorems 5 & 6: Unconditional Unit-Root (k_q = 1) Zero Bounds
+#    (mirrors Skolem/UnitRootDominance.lean)
+# ============================================================================
+
+def _char_poly_low_coeffs(lrs: LinearRecurrenceSequence) -> List[int]:
+    """
+    For u_{n+d} = a_{d-1} u_{n+d-1} + ... + a_0 u_n, return [b_0, ..., b_{d-1}] with
+    chi(x) = x^d + b_{d-1} x^{d-1} + ... + b_0, i.e. b_i = -a_i.
+    """
+    return [-a for a in lrs.coeffs]
+
+
+def unit_root_modulus(lrs: LinearRecurrenceSequence) -> int:
+    """
+    Factorization-free k_q = 1 modulus:
+        q = Strip(gcd(b_0, ..., b_{d-2}), b_{d-1}),
+    the largest divisor of gcd(b_0, ..., b_{d-2}) coprime to b_{d-1}.
+    Every prime factor of q sees exactly one q-adic unit root (Newton polygon slope-0
+    segment of length 1). Returns 1 if no such modulus exists.
+    """
+    b = _char_poly_low_coeffs(lrs)
+    g = 0
+    for bi in b[:-1]:
+        g = math.gcd(g, abs(bi))
+    if g == 0:
+        return 1
+    return strip_common_prime_factors(g, b[-1]) if b[-1] != 0 else 1
+
+
+def _poly_eval_mod(coeffs_low: List[int], x: int, mod: int) -> int:
+    """Evaluate monic x^d + sum_{i<d} c_i x^i modulo mod (coeffs_low = [c_0..c_{d-1}])."""
+    acc = 1
+    for c in reversed(coeffs_low):
+        acc = (acc * x + c) % mod
+    return acc
+
+
+def _poly_deriv_eval_mod(coeffs_low: List[int], x: int, mod: int) -> int:
+    d = len(coeffs_low)
+    full = coeffs_low + [1]  # full[i] = coefficient of x^i
+    acc = 0
+    for i in range(d, 0, -1):
+        acc = (acc * x + i * full[i]) % mod
+    return acc
+
+
+def unit_root_certificate(
+    lrs: LinearRecurrenceSequence,
+    q: Optional[int] = None,
+    max_m: int = 256,
+) -> Optional[Dict[str, object]]:
+    """
+    Compute the certificate consumed by `order3_unit_root_zero_bound` /
+    `order4_unit_root_zero_bound` in Skolem/UnitRootDominance.lean:
+
+        chi(x) == (x - mu) * (x^{d-1} + s_{d-2} x^{d-2} + ... + s_0)   (mod q^(m+1)),
+        q | s_i,  gcd(mu, q) = 1,  q^m || w0 = u_{d-1} + sum_i s_i u_i.
+
+    mu is obtained by Newton/Hensel lifting of the simple root mu_0 = -b_{d-1} (mod q);
+    this works for composite q without factoring because chi'(mu_0) == mu_0^{d-1} (mod q)
+    is a unit. Conclusion of the theorem: q^(m+1) does not divide u_k (so u_k != 0) for
+    every k >= (d-1)(m+1).
+
+    Returns None if q <= 1, or if q^(max_m+1) | w0 (the q-adic unit root is inactive
+    to the tested precision, i.e. c_1 == 0 or v_q(c_1) > max_m).
+    """
+    d = lrs.order
+    b = _char_poly_low_coeffs(lrs)
+    if q is None:
+        q = unit_root_modulus(lrs)
+    q = abs(q)
+    if q <= 1 or math.gcd(b[-1], q) != 1 or any(bi % q != 0 for bi in b[:-1]):
+        return None
+
+    mu = (-b[-1]) % q
+    for M in range(1, max_m + 2):
+        Q = q ** M
+        # Newton lifting of mu to a root of chi modulo Q.
+        mu %= Q
+        for _ in range(4 * M.bit_length() + 8):
+            fv = _poly_eval_mod(b, mu, Q)
+            if fv == 0:
+                break
+            dv = _poly_deriv_eval_mod(b, mu, Q)
+            mu = (mu - fv * pow(dv, -1, Q)) % Q
+        if _poly_eval_mod(b, mu, Q) != 0:
+            return None
+        # Synthetic division chi(x) = (x - mu) g(x) + rem: g = x^{d-1} + s_{d-2} x^{d-2} + ... + s_0
+        s = [0] * (d - 1)
+        carry = 1
+        for i in range(d - 2, -1, -1):
+            carry = (b[i + 1] + mu * carry) % Q
+            s[i] = carry
+        w0 = lrs.initial[d - 1] + sum(s[i] * lrs.initial[i] for i in range(d - 1))
+        if w0 % Q != 0:
+            m = M - 1
+            cert = {
+                "q": q,
+                "m": m,
+                "mu": mu,
+                "s": s,
+                "w0": w0,
+                "zero_bound": (d - 1) * (m + 1),
+            }
+            if not check_unit_root_certificate(lrs, cert):
+                return None
+            return cert
+    return None
+
+
+def check_unit_root_certificate(lrs: LinearRecurrenceSequence, cert: Dict[str, object]) -> bool:
+    """
+    Check exactly the hypotheses of the Lean theorems (Theorem 5 / Theorem 6):
+      - q^(m+1) divides every coefficient of chi(x) - (x - mu) g(x),
+      - q | s_i for all i, gcd(mu, q) = 1,
+      - q^m | w0 and q^(m+1) does not divide w0.
+    """
+    d = lrs.order
+    b = _char_poly_low_coeffs(lrs)
+    q, m, mu, s = int(cert["q"]), int(cert["m"]), int(cert["mu"]), list(cert["s"])
+    Q = q ** (m + 1)
+    g = s + [1]  # g[i] = coefficient of x^i, degree d-1
+    # (x - mu) g(x): coefficient of x^i is g[i-1] - mu g[i]
+    prod = [(g[i - 1] if i >= 1 else 0) - mu * (g[i] if i < d else 0) for i in range(d)]
+    if any((b[i] - prod[i]) % Q != 0 for i in range(d)):
+        return False
+    if any(si % q != 0 for si in s) or math.gcd(mu, q) != 1:
+        return False
+    w0 = lrs.initial[d - 1] + sum(s[i] * lrs.initial[i] for i in range(d - 1))
+    return w0 % (q ** m) == 0 and w0 % Q != 0
+
+
+def unit_root_zero_bound_test(lrs: LinearRecurrenceSequence, n: int) -> Optional[bool]:
+    """
+    Deterministic zero test via Theorems 5/6: if a k_q = 1 certificate exists, then
+    u_n != 0 for n >= zero_bound, and for n < zero_bound we evaluate u_n exactly
+    (zero_bound is polynomial in the input size, so u_n has polynomially many bits).
+    Returns True iff u_n == 0, or None if no certificate is available.
+    """
+    cert = unit_root_certificate(lrs)
+    if cert is None:
+        return None
+    if n >= int(cert["zero_bound"]):
+        return False
+    return lrs.term(n) == 0

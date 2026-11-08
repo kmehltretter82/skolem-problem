@@ -10,6 +10,8 @@ from src.deterministic_zero_test import (
     construct_pisano_counterexample,
     coprime_base,
     dyadic_interval_zero_test,
+    e2_large_prime_rejection_filter,
+    e2_odd_order_trace_certificate,
     factorization_free_D_nu_zero_test,
     hensel_depth_extension_test,
     interval_eval_term,
@@ -178,6 +180,33 @@ class TestSkolemAlgorithm(unittest.TestCase):
         self.assertEqual(info["S"], 1)
         self.assertEqual(unit_root_modulus(open_lrs), 1)
         self.assertEqual(info["D"], 727 ** 2)
+
+        # 3. Route E2 regression example: g_{3, +2}(x) = x^3 - 2 x^2 + 6 x - 29 (q = 29 prime)
+        # Trace sequence u = (3, 2, -8), p = 5, M = 62, ell = 12
+        g3_trace = LinearRecurrenceSequence(coeffs=[29, -6, 2], initial=[3, 2, -8])
+        self.assertEqual(g3_trace.find_period_M(5), 62)
+        expected = [
+            (1, 2, 136, 17),
+            (2, 7, 446, 3),
+            (3, 107, 6646, 12),
+            (4, 607, 37646, 27),
+            (5, 2482, 153896, 24),
+        ]
+        for R, exp_z, exp_n, exp_mod29 in expected:
+            certs = g3_trace.zero_search_subsequence_certificates(
+                ell=12, M=62, p=5, N=62 * (5 ** R) + 12, nu=R + 5
+            )
+            self.assertEqual(len(certs), 1)
+            cert = certs[0]
+            self.assertEqual((cert.R, cert.z, cert.n, cert.V, cert.m), (R, exp_z, exp_n, 1, 1))
+            self.assertEqual(cert.guaranteed_vp_bound, R + 1)
+            self.assertEqual(g3_trace.term(cert.n, mod=29), exp_mod29)
+            self.assertIs(e2_large_prime_rejection_filter(g3_trace, cert.n, q=29), False)
+
+        odd_cert = e2_odd_order_trace_certificate(g3_trace, q=29)
+        self.assertIsNotNone(odd_cert)
+        self.assertEqual(odd_cert["m_odd"], 7)
+        self.assertEqual(odd_cert["u0_mod_q"], 3)
 
 
 if __name__ == "__main__":

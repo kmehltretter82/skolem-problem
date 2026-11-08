@@ -336,6 +336,177 @@ theorem cubic_two_sum_norm_at_zero {R : Type*} [CommRing R] (x y z : R) (hz : x 
   rw [cubic_two_sum_norm_identity, hz, zero_mul, zero_sub]
 
 /--
+**Lemma E2.2 — Norm-Defect Identity (`notes/deterministic_zero_testing.md` §4.6.4):**
+Define the norm defect from the zero-case monomial as
+`𝓔_n := (t_1 + t_2)(t_2 + t_3)(t_3 + t_1) + t_1 t_2 t_3`.
+Then `𝓔_n = u_n * T_n` where `u_n = t_1 + t_2 + t_3` and `T_n = t_1 t_2 + t_3 (t_1 + t_2)`.
+In particular, when `t_1, t_2` are `q`-adic units and `v_q(t_3) > 0`, `T_n` is a `q`-adic unit,
+so `v_q(𝓔_n) = v_q(u_n)` does not gain any extra `q`-adic valuation beyond `v_q(u_n)`.
+-/
+theorem cubic_two_sum_norm_defect_identity {R : Type*} [CommRing R] (t1 t2 t3 : R) :
+    (t1 + t2) * (t2 + t3) * (t3 + t1) + t1 * t2 * t3 =
+    (t1 + t2 + t3) * (t1 * t2 + t3 * (t1 + t2)) := by
+  ring
+
+/--
+**Route E1 Obstruction — Hankel Shift-Determinant Collapse (`notes/deterministic_zero_testing.md` §4.6.4):**
+For any two-term exponential sum `Z_k = c_1 μ_1^k + c_2 μ_2^k`, the 2×2 Hankel determinant
+`Z_k Z_{k+2} - Z_{k+1}^2` collapses identically for every `k` to the monomial
+`c_1 c_2 (μ_1 μ_2)^k (μ_1 - μ_2)^2`.
+-/
+theorem two_sum_hankel_det_identity {R : Type*} [CommRing R] (c1 c2 μ1 μ2 : R) (k : ℕ) :
+    (c1 * μ1 ^ k + c2 * μ2 ^ k) * (c1 * μ1 ^ (k + 2) + c2 * μ2 ^ (k + 2)) -
+    (c1 * μ1 ^ (k + 1) + c2 * μ2 ^ (k + 1)) ^ 2 =
+    c1 * c2 * (μ1 * μ2) ^ k * (μ1 - μ2) ^ 2 := by
+  rw [pow_add, pow_add, pow_add, pow_add, mul_pow]
+  ring
+
+/--
+**Route E1 Mixed Shift-Determinant Identity (`notes/deterministic_zero_testing.md` §4.6.4):**
+For `Z_k = u_k - c_3 μ_3^k` and `Z_{k+1} = u_{k+1} - c_3 μ_3^{k+1}`, the 2×2 determinant with
+`(μ_3^k, μ_3^{k+1})` equals `μ_3^k (μ_3 u_k - u_{k+1})`, which at `u_k = 0` reduces to `-μ_3^k u_{k+1}`.
+-/
+theorem cubic_mixed_shift_det_identity {R : Type*} [CommRing R] (uk uk1 c3 μ3 : R) (k : ℕ) :
+    (uk - c3 * μ3 ^ k) * μ3 ^ (k + 1) - (uk1 - c3 * μ3 ^ (k + 1)) * μ3 ^ k =
+    μ3 ^ k * (μ3 * uk - uk1) := by
+  rw [pow_add, pow_one]
+  ring
+
+theorem cubic_mixed_shift_det_at_zero {R : Type*} [CommRing R] (uk uk1 c3 μ3 : R) (k : ℕ)
+    (hz : uk = 0) :
+    (uk - c3 * μ3 ^ k) * μ3 ^ (k + 1) - (uk1 - c3 * μ3 ^ (k + 1)) * μ3 ^ k =
+    -(μ3 ^ k * uk1) := by
+  rw [cubic_mixed_shift_det_identity, hz]
+  ring
+
+/--
+**Route E2 Dual-Prime Candidate Separation Deduction (`notes/deterministic_zero_testing.md` §4.6.4):**
+Given a `ZeroSearch` candidate `n`, suppose a candidate-separation theorem guarantees that whenever
+`u n ≠ 0`, either `v_p(u n) < P` or `v_q(u n) < Q` (i.e. `¬ p^P ∣ u n ∨ ¬ q^Q ∣ u n`).
+Then `u n = 0` is equivalent to the simultaneous modular vanishing `p^P ∣ u n ∧ q^Q ∣ u n`.
+-/
+theorem e2_candidate_dual_prime_zero_test_iff
+    (u : ℕ → ℤ) (p q P Q n : ℕ)
+    (h_sep : u n ≠ 0 → ¬ ((p : ℤ) ^ P ∣ u n) ∨ ¬ ((q : ℤ) ^ Q ∣ u n)) :
+    u n = 0 ↔ ((p : ℤ) ^ P ∣ u n ∧ (q : ℤ) ^ Q ∣ u n) := by
+  constructor
+  · intro hz
+    rw [hz]
+    exact ⟨dvd_zero _, dvd_zero _⟩
+  · rintro ⟨hp, hq⟩
+    by_contra hne
+    rcases h_sep hne with hnp | hnq
+    · exact hnp hp
+    · exact hnq hq
+
+/--
+**Route E2 Regression Example (`g_{3,+2}(x) = x^3 - 2x^2 + 6x - 29` Trace Sequence, §4.6.4):**
+The trace sequence `u_0 = 3, u_1 = 2, u_2 = -8`, `u_{n+3} = 2 u_{n+2} - 6 u_{n+1} + 29 u_n`
+belongs to the Order-3 open residual class (`D_{k=1} = 1, D = 29^2, k_{29} = 2`), and at `p = 5`
+(`M = 62, ℓ = 12`) has an infinite branch of `5`-adic ghost-root candidates (`z_1 = 2 ⇒ n_1 = 136`,
+`z_2 = 7 ⇒ n_2 = 446`, etc.). Yet modulo `q = 29`, `g_{3,+2}(x) ≡ x(x - 17)(x - 14) (mod 29)`
+with `ord_{29}(17/14) = ord_{29}(24) = 7` odd, so `29 ∤ u_n` and `u_n ≠ 0` for **every** `n ∈ ℕ`.
+-/
+def g3pos2TraceSeq : ℕ → ℤ
+  | 0 => 3
+  | 1 => 2
+  | 2 => -8
+  | n + 3 => 2 * g3pos2TraceSeq (n + 2) - 6 * g3pos2TraceSeq (n + 1) + 29 * g3pos2TraceSeq n
+
+/--
+For all `m : ℕ`, `g3pos2TraceSeq (m + 1) ≡ 17^{m+1} + 14^{m+1} (mod 29)`.
+-/
+theorem g3pos2TraceSeq_mod29_closed_form_pair :
+    ∀ m : ℕ,
+      (29 : ℤ) ∣ (g3pos2TraceSeq (m + 1) - ((17 : ℤ) ^ (m + 1) + (14 : ℤ) ^ (m + 1))) ∧
+      (29 : ℤ) ∣ (g3pos2TraceSeq (m + 2) - ((17 : ℤ) ^ (m + 2) + (14 : ℤ) ^ (m + 2)))
+  | 0 => by
+      constructor
+      · refine ⟨-1, ?_⟩; decide
+      · refine ⟨-17, ?_⟩; decide
+  | m + 1 => by
+      obtain ⟨h1, h2⟩ := g3pos2TraceSeq_mod29_closed_form_pair m
+      refine ⟨h2, ?_⟩
+      rcases h1 with ⟨k1, hk1⟩
+      rcases h2 with ⟨k2, hk2⟩
+      refine ⟨2 * k2 - 6 * k1 + g3pos2TraceSeq m - 9 * (17 : ℤ) ^ (m + 1) - 6 * (14 : ℤ) ^ (m + 1), ?_⟩
+      have hrec : g3pos2TraceSeq (m + 3) =
+          2 * g3pos2TraceSeq (m + 2) - 6 * g3pos2TraceSeq (m + 1) + 29 * g3pos2TraceSeq m := rfl
+      have h17 : (17 : ℤ) ^ (m + 3) = (17 : ℤ) ^ (m + 1) * 289 := by ring
+      have h14 : (14 : ℤ) ^ (m + 3) = (14 : ℤ) ^ (m + 1) * 196 := by ring
+      have h17' : (17 : ℤ) ^ (m + 2) = (17 : ℤ) ^ (m + 1) * 17 := by ring
+      have h14' : (14 : ℤ) ^ (m + 2) = (14 : ℤ) ^ (m + 1) * 14 := by ring
+      linarith
+
+theorem dvd_29_pow17_add_pow14_period (m : ℕ) :
+    (29 : ℤ) ∣ (((17 : ℤ) ^ (m + 28) + (14 : ℤ) ^ (m + 28)) - ((17 : ℤ) ^ m + (14 : ℤ) ^ m)) := by
+  have h17 : (29 : ℤ) ∣ ((17 : ℤ) ^ 28 - 1) := by decide
+  have h14 : (29 : ℤ) ∣ ((14 : ℤ) ^ 28 - 1) := by decide
+  have heq : ((17 : ℤ) ^ (m + 28) + (14 : ℤ) ^ (m + 28)) - ((17 : ℤ) ^ m + (14 : ℤ) ^ m) =
+      (17 : ℤ) ^ m * ((17 : ℤ) ^ 28 - 1) + (14 : ℤ) ^ m * ((14 : ℤ) ^ 28 - 1) := by ring
+  rw [heq]
+  exact dvd_add (dvd_mul_of_dvd_right h17 _) (dvd_mul_of_dvd_right h14 _)
+
+/--
+By Fermat's Little Theorem modulo 29, `17^{n+28} + 14^{n+28} ≡ 17^n + 14^n (mod 29)`,
+and since `(17/14) ≡ 24 (mod 29)` has odd multiplicative order `7`, `29 ∤ (17^n + 14^n)` for all `n : ℕ`.
+-/
+theorem not_dvd_29_pow17_add_pow14 : ∀ n : ℕ, ¬ ((29 : ℤ) ∣ ((17 : ℤ) ^ n + (14 : ℤ) ^ n))
+  | 0 => by decide
+  | 1 => by decide
+  | 2 => by decide
+  | 3 => by decide
+  | 4 => by decide
+  | 5 => by decide
+  | 6 => by decide
+  | 7 => by decide
+  | 8 => by decide
+  | 9 => by decide
+  | 10 => by decide
+  | 11 => by decide
+  | 12 => by decide
+  | 13 => by decide
+  | 14 => by decide
+  | 15 => by decide
+  | 16 => by decide
+  | 17 => by decide
+  | 18 => by decide
+  | 19 => by decide
+  | 20 => by decide
+  | 21 => by decide
+  | 22 => by decide
+  | 23 => by decide
+  | 24 => by decide
+  | 25 => by decide
+  | 26 => by decide
+  | 27 => by decide
+  | m + 28 => fun hdvd => by
+      have hper := dvd_29_pow17_add_pow14_period m
+      have hprev : (29 : ℤ) ∣ ((17 : ℤ) ^ m + (14 : ℤ) ^ m) := by
+        have := dvd_sub hdvd hper
+        ring_nf at this ⊢
+        exact this
+      exact not_dvd_29_pow17_add_pow14 m hprev
+
+/--
+**Unconditional Non-Vanishing of `g3pos2TraceSeq` (`[Lean]`, zero external hypotheses):**
+For every `n : ℕ`, `29 ∤ g3pos2TraceSeq n` and therefore `g3pos2TraceSeq n ≠ 0`.
+-/
+theorem g3pos2TraceSeq_no_zeros (n : ℕ) : ¬ ((29 : ℤ) ∣ g3pos2TraceSeq n) ∧ g3pos2TraceSeq n ≠ 0 := by
+  have hnd : ¬ ((29 : ℤ) ∣ g3pos2TraceSeq n) := by
+    cases n with
+    | zero => decide
+    | succ m =>
+      intro hdvd
+      have hcf := (g3pos2TraceSeq_mod29_closed_form_pair m).1
+      have hpow : (29 : ℤ) ∣ ((17 : ℤ) ^ (m + 1) + (14 : ℤ) ^ (m + 1)) := by
+        have := dvd_sub hdvd hcf
+        ring_nf at this ⊢
+        exact this
+      exact not_dvd_29_pow17_add_pow14 (m + 1) hpow
+  exact ⟨hnd, fun hz => hnd (by rw [hz]; exact dvd_zero _)⟩
+
+/--
 *(Superseded by the zero-bound theorems in `Skolem/UnitRootDominance.lean` and above; retained for
 backwards compatibility.)*
 Suppose `D` has a prime factor `q ∣ D` at which `¬ ((q : ℤ) ^ ν ∣ u m)` for all `m ≤ N` with `u m ≠ 0`.

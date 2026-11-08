@@ -79,6 +79,30 @@ def is_identity_mod(A: List[List[int]], mod: int) -> bool:
 
 
 @dataclass
+class ZeroSearchCandidateCertificate:
+    """
+    Full candidate certificate retained by ZeroSearch (Route E2, §4.6.4):
+      - p, M, ell: small prime p > d+1 (p ∤ a_0), period M (A^M ≡ I mod p), subsequence offset ell
+      - z, R: disc center z in {0, ..., p^R - 1} and depth R of D(z, R)
+      - V, m: baseline Mahler valuation V = V(F_ell) and certified root multiplicity m = j(h_{z,R}) >= 1
+      - n: candidate index n = M * z + ell (satisfying v_p(u_n) >= V + m * R by Lemma E2.1)
+    """
+    p: int
+    M: int
+    ell: int
+    z: int
+    R: int
+    V: int
+    m: int
+    n: int
+
+    @property
+    def guaranteed_vp_bound(self) -> int:
+        """Lower bound V + m * R on v_p(u_n) guaranteed when all m roots of h_{z,R} lie in D(z, R)."""
+        return self.V + self.m * self.R
+
+
+@dataclass
 class LinearRecurrenceSequence:
     """
     Order-d integer LRS satisfying:
@@ -187,6 +211,53 @@ class LinearRecurrenceSequence:
         j = max(k for k, v in enumerate(vals) if v == V)
         return j, V, diffs
 
+    def zero_search_subsequence_certificates(
+        self,
+        ell: int,
+        M: int,
+        p: int,
+        N: int,
+        nu: int,
+    ) -> List[ZeroSearchCandidateCertificate]:
+        """
+        Run Algorithm 1 (`ZeroSearch`) on subsequence F_ell(n) = u_{Mn + ell} and return
+        full `ZeroSearchCandidateCertificate` records `(p, M, ell, z, R, V, m, n)`.
+        """
+        j_F, V_F, _ = self.j_and_V_h(ell, M, p, z=0, r=0, nu=nu)
+        if j_F == 0:
+            return []
+
+        discs: List[Tuple[int, int, int]] = [(0, 0, j_F)]  # (z, r, parent_j_bound)
+        certs: List[ZeroSearchCandidateCertificate] = []
+
+        while discs:
+            next_discs: List[Tuple[int, int, int]] = []
+            for z, r, j_bound in discs:
+                pr = p ** r
+                for a in range(p):
+                    z_prime = z + pr * a
+                    j_h, _, _ = self.j_and_V_h(ell, M, p, z=z_prime, r=r + 1, nu=nu, max_k=j_bound)
+                    if j_h >= 1:
+                        if (p ** (r + 1)) * M + ell >= N:
+                            n_cand = M * z_prime + ell
+                            if n_cand <= N:
+                                certs.append(
+                                    ZeroSearchCandidateCertificate(
+                                        p=p,
+                                        M=M,
+                                        ell=ell,
+                                        z=z_prime,
+                                        R=r + 1,
+                                        V=V_F,
+                                        m=j_h,
+                                        n=n_cand,
+                                    )
+                                )
+                        else:
+                            next_discs.append((z_prime, r + 1, j_h))
+            discs = next_discs
+        return certs
+
     def zero_search_subsequence(
         self,
         ell: int,
@@ -199,41 +270,18 @@ class LinearRecurrenceSequence:
         Run Algorithm 1 (`ZeroSearch`) on subsequence F_ell(n) = u_{Mn + ell}.
         Returns the list of candidate indices z such that 0 <= Mz + ell <= N.
         """
-        j_F, _, _ = self.j_and_V_h(ell, M, p, z=0, r=0, nu=nu)
-        if j_F == 0:
-            return []
+        return [c.z for c in self.zero_search_subsequence_certificates(ell, M, p, N, nu)]
 
-        discs: List[Tuple[int, int, int]] = [(0, 0, j_F)]  # (z, r, parent_j_bound)
-        zeros: List[int] = []
-
-        while discs:
-            next_discs: List[Tuple[int, int, int]] = []
-            for z, r, j_bound in discs:
-                pr = p ** r
-                for a in range(p):
-                    z_prime = z + pr * a
-                    j_h, _, _ = self.j_and_V_h(ell, M, p, z=z_prime, r=r + 1, nu=nu, max_k=j_bound)
-                    if j_h >= 1:
-                        if (p ** (r + 1)) * M + ell >= N:
-                            if M * z_prime + ell <= N:
-                                zeros.append(z_prime)
-                        else:
-                            next_discs.append((z_prime, r + 1, j_h))
-            discs = next_discs
-        return zeros
-
-    def find_candidate_zeros(
+    def find_candidate_certificates(
         self,
         N: int,
         p: Optional[int] = None,
         M: Optional[int] = None,
         nu: Optional[int] = None,
-    ) -> Tuple[List[Tuple[int, int]], List[int]]:
+    ) -> Tuple[List[Tuple[int, int]], List[ZeroSearchCandidateCertificate]]:
         """
-        Full Algorithm 1 from arXiv:2507.11234:
-        Returns (APs, candidates) where:
-          - APs is a list of (M, ell) for which u_{Mn + ell} == 0 for all n >= 0.
-          - candidates is a sorted list of candidate indices n in [0, N] outside APs.
+        Full Algorithm 1 from arXiv:2507.11234 returning `(APs, candidate_certificates)`
+        where each candidate carries its `(p, M, ell, z, R, V, m, n)` certificate.
         """
         d = self.order
         if p is None:
@@ -242,7 +290,7 @@ class LinearRecurrenceSequence:
             M = self.find_period_M(p)
 
         APs: List[Tuple[int, int]] = []
-        candidates: List[int] = []
+        certs: List[ZeroSearchCandidateCertificate] = []
         R = max(1, math.ceil(math.log(max(N, 2), p)))
 
         for ell in range(M):
@@ -263,11 +311,25 @@ class LinearRecurrenceSequence:
             else:
                 nu_ell = nu
 
-            z_list = self.zero_search_subsequence(ell, M, p, N, nu_ell)
-            for z in z_list:
-                n_cand = M * z + ell
-                if 0 <= n_cand <= N:
-                    candidates.append(n_cand)
+            for cert in self.zero_search_subsequence_certificates(ell, M, p, N, nu_ell):
+                if 0 <= cert.n <= N:
+                    certs.append(cert)
 
-        candidates.sort()
-        return APs, candidates
+        certs.sort(key=lambda c: c.n)
+        return APs, certs
+
+    def find_candidate_zeros(
+        self,
+        N: int,
+        p: Optional[int] = None,
+        M: Optional[int] = None,
+        nu: Optional[int] = None,
+    ) -> Tuple[List[Tuple[int, int]], List[int]]:
+        """
+        Full Algorithm 1 from arXiv:2507.11234:
+        Returns (APs, candidates) where:
+          - APs is a list of (M, ell) for which u_{Mn + ell} == 0 for all n >= 0.
+          - candidates is a sorted list of candidate indices n in [0, N] outside APs.
+        """
+        APs, certs = self.find_candidate_certificates(N, p=p, M=M, nu=nu)
+        return APs, [c.n for c in certs]

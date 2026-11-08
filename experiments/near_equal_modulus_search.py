@@ -37,11 +37,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import mpmath as mp
 
 from src.deterministic_zero_test import (
+    e2_large_prime_rejection_filter,
+    e2_odd_order_trace_certificate,
     order3_global_local_dichotomy,
     order4_global_local_dichotomy,
     unit_root_modulus,
 )
-from src.skolem_algorithm import LinearRecurrenceSequence
+from src.skolem_algorithm import LinearRecurrenceSequence, v_p
 
 
 def is_prime(n: int) -> bool:
@@ -286,6 +288,53 @@ def verify_norm_identity_on_k_q_eq_2() -> Dict[str, object]:
     }
 
 
+def verify_route_e2_g3pos2_trace_example() -> Dict[str, object]:
+    """
+    Route E2 Exact Regression Example (§4.6.4):
+      g_{3,+2}(x) = x^3 - 2x^2 + 6x - 29 (q = 29 prime, k_29 = 2),
+      trace sequence u_n = rho^n + alpha^n + bar(alpha)^n with (u_0, u_1, u_2) = (3, 2, -8)
+      and u_{n+3} = 2 u_{n+2} - 6 u_{n+1} + 29 u_n.
+    At p = 5, M = 62, ell = 12:
+      F_{12}(z) / 5 == 2 + 4z (mod 5) has a unique 5-adic root lifting to
+      (R=1: z=2, n=136), (R=2: z=7, n=446), (R=3: z=107, n=6646),
+      (R=4: z=607, n=37646), (R=5: z=2482, n=153896),
+      all rejected modulo q = 29 and certified globally zero-free by `e2_odd_order_trace_certificate`.
+    """
+    lrs = LinearRecurrenceSequence(coeffs=[29, -6, 2], initial=[3, 2, -8])
+    p = 5
+    M = lrs.find_period_M(p)
+    assert M == 62, f"Expected M=62, got {M}"
+    ell = 12
+    expected_rows = [
+        (1, 2, 136, 2, 17),
+        (2, 7, 446, 3, 3),
+        (3, 107, 6646, 4, 12),
+        (4, 607, 37646, 5, 27),
+        (5, 2482, 153896, 6, 24),
+    ]
+    rows = []
+    for R, exp_z, exp_n, exp_v5, exp_mod29 in expected_rows:
+        N_bound = M * (p ** R) + ell
+        certs = lrs.zero_search_subsequence_certificates(ell=ell, M=M, p=p, N=N_bound, nu=R + 5)
+        assert len(certs) == 1, f"Expected 1 certificate at R={R}, got {len(certs)}"
+        cert = certs[0]
+        val_5 = v_p(lrs.term(cert.n, mod=p ** (R + 4)), p, R + 4)
+        mod_29 = lrs.term(cert.n, mod=29)
+        assert (cert.R, cert.z, cert.n, val_5, mod_29) == (R, exp_z, exp_n, exp_v5, exp_mod29)
+        assert cert.V == 1 and cert.m == 1 and cert.guaranteed_vp_bound == R + 1
+        assert e2_large_prime_rejection_filter(lrs, cert.n, q=29) is False
+        rows.append((cert.R, cert.z, cert.n, val_5, mod_29))
+
+    odd_cert = e2_odd_order_trace_certificate(lrs, q=29)
+    assert odd_cert is not None and odd_cert["m_odd"] == 7 and odd_cert["u0_mod_q"] == 3
+    return {
+        "M": M,
+        "ell": ell,
+        "rows": rows,
+        "odd_order_certificate": odd_cert,
+    }
+
+
 def main() -> None:
     print("=" * 78)
     print("STEP B3 & B4: NEAR-EQUAL-MODULUS FAMILIES & OPEN-CLASS CONSTRUCTIONS")
@@ -346,6 +395,13 @@ def main() -> None:
     print("\n4. Step D9 Subfield Norm Identity Verification (q = 29, k_q = 2):")
     print(f"   max |(x+y)(y+z)(z+x) - ((x+y+z)(xy+yz+zx) - xyz)| = {norm_res['max_identity_error']:.2e}")
     print(f"   at zero u_3 = 0: |N_{{F/Q}}(Z_3) - (-c_1 c_2 c_3 (-b_0)^3)| = {norm_res['zero_collapse_error_at_k3']:.2e}")
+
+    # 5. Route E2: g_{3,+2} trace sequence 5-adic candidate branch & mod-29 rejection
+    e2_res = verify_route_e2_g3pos2_trace_example()
+    print("\n5. Route E2 Regression Example: g_{3,+2}(x) = x^3 - 2x^2 + 6x - 29, u=(3,2,-8), p=5, M=62, ell=12:")
+    for R, z, n_idx, val5, mod29 in e2_res["rows"]:
+        print(f"   R={R}: z={z:4d}, n=62z+12={n_idx:6d}, v_5(u_n)={val5}, u_n mod 29={mod29:2d} (rejected!)")
+    print(f"   Mod-29 odd-order trace certificate: {e2_res['odd_order_certificate']}")
 
 
 if __name__ == "__main__":

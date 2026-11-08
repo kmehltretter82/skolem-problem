@@ -300,12 +300,51 @@ Every order-3/4 case not covered above has the same shape. At **every** place th
 
 Across all three families — $f_N(x) = x(x-N)^2 - 1$ (Order 3, $D=1$), $h_N(x) = x(x-N)^3 - 1$ (Order 4, $D=1, k_\infty=3$), and $g_{N,\pm 2}(x) = (x-N)(x^2+x+N^2) \mp 2$ (Order 3, $D = q^2, D_{k=1}=1$) — scanning both small initial boxes ($u_i \in [-4, 4]$) and initial states with planted zeros at $0 = k_1 < k_2 \le 25$ up to search horizon $k = 300$ found **zero** unexpected extra zeros beyond the planted zero (`extra_zeros_beyond_plant = 0`). (Note that because the search horizon $k \le 300$ and planted zero range $k_2 \le 25$ are fixed while $\|\boldsymbol{u}\|$ grows with $\log N$, the decreasing ratio $k_{\max}/\|\boldsymbol{u}\| = O(1/\log N)$ reflects the fixed experimental window; the substantive empirical finding is the absence of any unplanted zeros in `[0, 300]`.)
 
+#### 4.6.4 Route E2: Candidate Certificates, Lemmas E2.1–E2.2, the $g_{3,+2}$ Regression Example, and the Candidate Separation Target
+
+Rather than bounding all zeros unconditionally, Route E2 exploits the certified $p$-adic structure of the candidates $n = M z + \ell$ produced by `ZeroSearch` (Algorithm 1 of `arXiv:2507.11234`, implemented as `ZeroSearchCandidateCertificate(p, M, ell, z, R, V, m, n)` in `src/skolem_algorithm.py`):
+
+1. **Lemma E2.1 (Candidate Divisibility with Multiplicity) [Paper]:**
+   For a small prime $p > d+1$ with $p \nmid b_0$ and period $M$ ($A^M \equiv I \pmod p$), the Mahler interpolant $F_\ell(x) = u_{Mx+\ell} = \sum_{j \ge 0} b_j x^j$ has baseline valuation $V = \min_j v_p(b_j)$ and Weierstrass factorization $F_\ell(x) = p^V U(x) \prod_{j=1}^s (x - a_j)$ ($s \le d-1$, with $U(x)$ unit-valued on $\mathcal{O}_p$). If a retained disc $D(z, R) = \{x \in \mathbb{C}_p : v_p(x - z) \ge R\}$ contains $m \in \{1, \dots, s\}$ roots of $F_\ell$ counted with multiplicity, then
+   $$v_p(u_{Mz+\ell}) = v_p(F_\ell(z)) = V + \sum_{j=1}^s v_p(z - a_j) \ge V + m R.$$
+   *(Caution on Proposition 3.4 of `arXiv:2507.11234`):* The bound $V(F_\ell(p^R x + z)) \le V + R j(F_\ell)$ bounds the minimum coefficient valuation of the recentered series (sufficing to count roots in $D(z, R)$), not the valuation of its constant term $u_{Mz+\ell}$ at the center $z$ (e.g., for $F(x) = x - p^K$ with $R < K$ and $z = 0$, $V(F(p^R x)) = R$ while $v_p(F(0)) = K$).
+
+2. **Separating the $p$-adic Candidate Certificate from the $q$-adic Zero Condition (and Lemma E2.2) [Lean: `cubic_two_sum_norm_defect_identity`]:**
+   At the distinguished embedding above $q \mid \hat{b}_0$ where $v_q(\hat{\mu}_1) = v_q(\hat{\mu}_2) = 0$ and $v_q(\hat{\mu}_3) = 1$, writing $Z_n = c_1\hat{\mu}_1^n + c_2\hat{\mu}_2^n = u_n - c_3\hat{\mu}_3^n$ and $a_i = v_q(c_i)$ gives:
+   - For every affordable precision $m \le n + a_3$, $Z_n \equiv u_n \pmod{q^m}$ (so testing $Z_n \bmod q^m$ is identical to testing $u_n \bmod q^m$; the condition $v_q(Z_n) = n + a_3$ holds *only* if $u_n = 0$ and is not supplied by `ZeroSearch`). Meanwhile, at $p \nmid q$, $v_p(u_n) \ge V + mR > v_p(c_3)$ implies $v_p(Z_n) = v_p(c_3) = O(1)$, so $p$ and $q$ do not divide the same two-term sum $Z_n$.
+   - **Lemma E2.2 (Norm-Defect Identity):** Define the norm defect from the zero-case monomial as $\mathcal{E}_n := N_{F/\mathbb{Q}}(Z_n) + C(-\hat{b}_0)^n$. By the exact ring identity (`Skolem/DeterministicZeroTest.lean :: cubic_two_sum_norm_defect_identity`)
+     $$\mathcal{E}_n = (t_1+t_2)(t_2+t_3)(t_3+t_1) + t_1 t_2 t_3 = u_n T_n, \qquad T_n = t_1 t_2 + t_3 Z_n,$$
+     whenever $n + a_3 > \max(a_1, a_2)$ we have $v_q(T_n) = a_1 + a_2$ and hence $v_q(\mathcal{E}_n) = v_q(u_n) + a_1 + a_2$. Thus subtracting the zero-case monomial from $N_{F/\mathbb{Q}}(Z_n)$ does not create any extra $q$-adic valuation beyond $v_q(u_n)$.
+   - **Why CRT + naive Archimedean size needs $m > n/3$ base-$q$ digits:** If $p^s \mid u_n$ and $q^m \mid u_n$ with $u_n \ne 0$, comparing $p^s q^m \le |u_n| \le H \Lambda^n$ (where $\log\Lambda = \frac{\log q + \gamma\delta_\infty}{3}$, $\gamma \in \{1, 2\}$) requires $m > \frac{n}{3} + \frac{\log H + \gamma n\delta_\infty/3 - s\log p}{\log q}$, which still has $\Theta(n\log q)$ bits for large $n$.
+   - **Why first-pass Route E1 variants stall [Lean: `two_sum_hankel_det_identity`, `cubic_mixed_shift_det_identity`]:** The $2\times 2$ Hankel shift determinant $Z_k Z_{k+2} - Z_{k+1}^2 = c_1 c_2 (\mu_1\mu_2)^k (\mu_1 - \mu_2)^2$ collapses identically for all $k$; the mixed determinant $Z_k \mu_3^{k+1} - Z_{k+1} \mu_3^k = \mu_3^k(\mu_3 u_k - u_{k+1})$ equals $-\mu_3^k u_{k+1}$ at $u_k = 0$ (which still requires an independent upper bound and can vanish when $u_1 = u_2 = 0$, as in $(u_0, u_1, u_2) = (1, 0, 0)$); and for $g_{N,\pm 2}$ the residual quadratic $X^2 - (N-1)X + N(N-1)$ has discriminant $-(N-1)(3N+1) \not\equiv 0 \pmod q$, so $v_q(1 - \mu_1/\mu_2) = 0$.
+
+3. **Exact Regression Example (`g3pos2TraceSeq`) & Reusable Odd-Order Residual Ratio Certificate [Lean: `g3pos2TraceSeq_no_zeros`]:**
+   Take $g_{3,+2}(x) = x^3 - 2x^2 + 6x - 29$ ($q = 29$ prime, $k_{29} = 2$) and its trace sequence $u_n = \rho^n + \alpha^n + \bar{\alpha}^n$ with $(u_0, u_1, u_2) = (3, 2, -8)$ and $u_{n+3} = 2u_{n+2} - 6u_{n+1} + 29u_n$:
+   - At $p = 5$, $M = 62$ ($A^{62} \equiv I \pmod 5$), the subsequence $F_{12}(z) = u_{62z+12}$ has $\frac{1}{5}F_{12}(z) \equiv 2 + 4z \pmod 5$ ($V = 1, m = 1$), so Hensel lifting produces an infinite branch of certified $5$-adic candidates (`experiments/near_equal_modulus_search.py`):
+     | Depth $R$ | Disc center $z_R$ | Candidate $n_R = 62z_R + 12$ | $v_5(u_{n_R})$ | $u_{n_R} \bmod 29$ | `e2_large_prime_rejection_filter` |
+     |---|---|---|---|---|---|
+     | $1$ | $2$ | $136$ | $2$ | $17$ | Rejected (`False`) |
+     | $2$ | $7$ | $446$ | $3$ | $3$ | Rejected (`False`) |
+     | $3$ | $107$ | $6{,}646$ | $4$ | $12$ | Rejected (`False`) |
+     | $4$ | $607$ | $37{,}646$ | $5$ | $27$ | Rejected (`False`) |
+     | $5$ | $2{,}482$ | $153{,}896$ | $6$ | $24$ | Rejected (`False`) |
+   - Modulo $q = 29$, $g_{3,+2}(x) \equiv x(x - 17)(x - 14) \pmod{29}$, so for all $n \ge 1$, $u_n \equiv 17^n + 14^n \equiv 14^n(24^n + 1) \pmod{29}$. Because $\xi \equiv 17/14 \equiv 24 \pmod{29}$ satisfies $\xi^{m_{\mathrm{odd}}} = 24^7 \equiv 1 \pmod{29}$ (where $m_{\mathrm{odd}} = 7$ is the odd part of $29 - 1 = 28$), $\mathrm{ord}_{29}(24) = 7$ is odd, so $24^n \not\equiv -1 \pmod{29}$ for all $n \ge 1$, and $u_0 = 3 \not\equiv 0 \pmod{29}$.
+   - This is proved unconditionally in Lean 4 with zero external hypotheses (`Skolem/DeterministicZeroTest.lean :: g3pos2TraceSeq_no_zeros`) and implemented as a general $O((\log q)^3)$ factorization-free certificate `e2_odd_order_trace_certificate` in `src/deterministic_zero_test.py`.
+
+4. **The Precise Candidate Separation Target [Open] (Wrapper in [Lean: `e2_candidate_dual_prime_zero_test_iff`]):**
+   Let $\mathcal{C}$ be the certified `ZeroSearch` candidate set for a search bound $X$, with encoded size $\mathcal{L} = \|\boldsymbol{u}\| + \log_2(X + 2)$.
+   > **Candidate Separation Target [Open]:** There exist explicit polynomial precision bounds $P(\mathcal{L}), Q(\mathcal{L}) = \mathrm{poly}(\mathcal{L})$ such that every certified candidate $n \in \mathcal{C}$ in the residual cubic class satisfies
+   > $$u_n \ne 0 \quad \Longrightarrow \quad v_p(u_n) < P(\mathcal{L}) \;\;\text{or}\;\; v_q(u_n) < Q(\mathcal{L}).$$
+   When this holds, `e2_candidate_dual_prime_zero_test_iff` gives $u_n = 0 \iff \big(u_n \equiv 0 \pmod{p^{P(\mathcal{L})}} \wedge u_n \equiv 0 \pmod{q^{Q(\mathcal{L})}}\big)$ in deterministic $\mathrm{poly}(\mathcal{L})$ time. Until proved in full generality, `e2_large_prime_rejection_filter` implements the sound 4-step rejection filter (returning `False` when $u_n \not\equiv 0 \pmod{q^m}$ and `None` when $u_n \equiv 0 \pmod{q^m}$).
+
 ### 4.7 Lean inventory for Part IV
 
 | Theorem | File | Assumptions |
 |---|---|---|
 | `unit_ratio_order_frozen`, `window_climb_zero_bound`, `order3_unit_root_zero_bound`, `order4_unit_root_zero_bound`, `order3_unit_root_mod_q`, `order_d_unit_root_zero_bound`, `unitRootExample_no_late_zeros` | `Skolem/UnitRootDominance.lean` | **none** (standard axioms only) |
 | `order3_slope_normalization_scaling`, `order3_normalized_unit_root_zero_bound` | `Skolem/UnitRootDominance.lean` | **none** (standard axioms only; proves $S^2 v_k = S^k z_k$ and transfers Theorem 5 across slope normalization) |
-| `cubic_two_sum_norm_identity`, `cubic_two_sum_norm_at_zero` | `Skolem/DeterministicZeroTest.lean` | **none** (standard axioms only; proves $(x+y)(y+z)(z+x) = (x+y+z)(xy+yz+zx)-xyz$ and its monomial collapse at $x+y+z=0$) |
-| `smyth_mahler_measure_consecutive_gap_order3/4`, `archimedean_gap_zero_bound`, `order3_unit_branch_smyth_baker_zero_bound`, `padic_two_root_yu_zero_bound` | `Skolem/DeterministicZeroTest.lean` | Smyth's bound, Mahler-measure inequality, and two-term Baker/Yu bounds passed as explicit hypotheses; the deduction to $u_k \ne 0$ is formal |
+| `cubic_two_sum_norm_identity`, `cubic_two_sum_norm_at_zero`, `cubic_two_sum_norm_defect_identity` | `Skolem/DeterministicZeroTest.lean` | **none** (standard axioms only; proves $(x+y)(y+z)(z+x) = (x+y+z)(xy+yz+zx)-xyz$, its monomial collapse at $x+y+z=0$, and Lemma E2.2's norm-defect identity $\mathcal{E}_n = u_n T_n$) |
+| `two_sum_hankel_det_identity`, `cubic_mixed_shift_det_identity`, `cubic_mixed_shift_det_at_zero` | `Skolem/DeterministicZeroTest.lean` | **none** (standard axioms only; proves the Route E1 Hankel and mixed shift-determinant identities) |
+| `g3pos2TraceSeq_mod29_closed_form_pair`, `not_dvd_29_pow17_add_pow14`, `g3pos2TraceSeq_no_zeros` | `Skolem/DeterministicZeroTest.lean` | **none** (standard axioms only; proves $29 \nmid u_n$ and $u_n \ne 0$ for all $n \in \mathbb{N}$ on the $g_{3,+2}$ trace sequence) |
+| `smyth_mahler_measure_consecutive_gap_order3/4`, `archimedean_gap_zero_bound`, `order3_unit_branch_smyth_baker_zero_bound`, `padic_two_root_yu_zero_bound`, `e2_candidate_dual_prime_zero_test_iff` | `Skolem/DeterministicZeroTest.lean` | Smyth's bound, Mahler-measure inequality, two-term Baker/Yu bounds, or Candidate Separation Target passed as explicit hypotheses; the deduction to $u_k \ne 0$ / $u_n = 0$ is formal |
 | `factorization_free_composite_power_test_iff`, `order3_global_local_dichotomy_iff` | `Skolem/DeterministicZeroTest.lean` | Baker/Yu-type precision bound as a hypothesis; **superseded** by the zero-bound theorems above |

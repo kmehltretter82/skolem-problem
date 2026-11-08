@@ -531,6 +531,111 @@ def factorization_free_D_nu_zero_test(
     return True
 
 
+def e2_large_prime_rejection_filter(
+    lrs: LinearRecurrenceSequence,
+    n: int,
+    q: Optional[int] = None,
+    m_prec: int = 1,
+) -> Optional[bool]:
+    """
+    Route E2 Sound Large-Prime Rejection Filter (§4.6.4):
+    Given a ZeroSearch candidate index `n`, evaluates the slope-normalized sequence `z_n`
+    modulo `q^{m_prec}` (where `q` defaults to `D_unit` at order 3 or `D_{<=2}` at order 4).
+      - Returns `False` (certifying `u_n != 0`) when `z_n != 0 (mod q^{m_prec})`.
+      - Returns `None` (unresolved by the filter alone) when `z_n == 0 (mod q^{m_prec})`.
+    """
+    _, z_lrs = slope_normalize_lrs(lrs)
+    if q is None:
+        d = z_lrs.order
+        if d == 3:
+            b2, b1, b0 = -z_lrs.coeffs[2], -z_lrs.coeffs[1], -z_lrs.coeffs[0]
+            q = int(order3_global_local_dichotomy(b2, b1, b0)["D_unit"])
+        elif d == 4:
+            b3, b2, b1, b0 = -z_lrs.coeffs[3], -z_lrs.coeffs[2], -z_lrs.coeffs[1], -z_lrs.coeffs[0]
+            q = int(order4_global_local_dichotomy(b3, b2, b1, b0)["D_le_2"])
+        else:
+            return None
+    if q is None or q <= 1:
+        return None
+    modulus = q ** max(1, m_prec)
+    if z_lrs.term(n, mod=modulus) != 0:
+        return False
+    return None
+
+
+def e2_odd_order_trace_certificate(
+    lrs: LinearRecurrenceSequence,
+    q: int,
+) -> Optional[Dict[str, int]]:
+    """
+    Route E2 Reusable Odd-Order Residual Ratio Certificate for Trace-Like Sequences (§4.6.4):
+    For an order-3 LRS with prime `q | b_0` and `gcd(b_1, q) = 1`:
+      chi(x) = x^3 + b_2 x^2 + b_1 x + b_0 == x (x^2 + b_2 x + b_1) (mod q).
+    If `x^2 + b_2 x + b_1 == (x - a)(x - b) (mod q)` splits into distinct nonzero roots `a, b (mod q)`,
+    `u_1 == a + b (mod q)` and `u_2 == a^2 + b^2 (mod q)` (so `u_n == a^n + b^n (mod q)` for all `n >= 1`),
+    and the residual root ratio `xi = a * b^{-1} (mod q)` satisfies
+      xi^{m_odd} == 1 (mod q),   where m_odd = (q - 1) / 2^{v_2(q - 1)} is the odd part of q - 1,
+    then `ord_q(xi)` divides `m_odd` and is therefore ODD, so `xi^n != -1 (mod q)` and
+    `u_n == b^n (xi^n + 1) != 0 (mod q)` for every `n >= 1`!
+    This check runs in O((log q)^3) time without factoring `q - 1` or enumerating powers.
+    """
+    if lrs.order != 3 or q <= 2 or q % 2 == 0:
+        return None
+    b2, b1, b0 = -lrs.coeffs[2], -lrs.coeffs[1], -lrs.coeffs[0]
+    if b0 % q != 0 or math.gcd(b1, q) != 1:
+        return None
+    # Check initial state matches u_n == a^n + b^n (mod q) for n = 1, 2:
+    # a + b == -b2 (mod q), a^2 + b^2 == b2^2 - 2*b1 (mod q)
+    if (lrs.initial[1] - (-b2)) % q != 0:
+        return None
+    if (lrs.initial[2] - (b2 * b2 - 2 * b1)) % q != 0:
+        return None
+    disc = (b2 * b2 - 4 * b1) % q
+    if disc == 0 or pow(disc, (q - 1) // 2, q) != 1:
+        return None
+    # Tonelli-Shanks square root of disc mod q
+    Q_ts, S_ts = q - 1, 0
+    while Q_ts % 2 == 0:
+        Q_ts //= 2
+        S_ts += 1
+    z_nr = 2
+    while pow(z_nr, (q - 1) // 2, q) != q - 1:
+        z_nr += 1
+    M_ts = S_ts
+    c_ts = pow(z_nr, Q_ts, q)
+    t_ts = pow(disc, Q_ts, q)
+    R_ts = pow(disc, (Q_ts + 1) // 2, q)
+    while t_ts != 1:
+        i_ts = 1
+        temp = (t_ts * t_ts) % q
+        while temp != 1:
+            temp = (temp * temp) % q
+            i_ts += 1
+        b_ts = pow(c_ts, 1 << (M_ts - i_ts - 1), q)
+        M_ts = i_ts
+        c_ts = (b_ts * b_ts) % q
+        t_ts = (t_ts * c_ts) % q
+        R_ts = (R_ts * b_ts) % q
+    inv2 = (q + 1) // 2
+    a_root = ((-b2 + R_ts) * inv2) % q
+    b_root = ((-b2 - R_ts) * inv2) % q
+    if a_root == 0 or b_root == 0:
+        return None
+    xi = (a_root * pow(b_root, -1, q)) % q
+    # Odd part of q - 1 is Q_ts:
+    m_odd = Q_ts
+    if pow(xi, m_odd, q) != 1:
+        return None
+    return {
+        "q": q,
+        "a": a_root,
+        "b": b_root,
+        "xi": xi,
+        "m_odd": m_odd,
+        "u0_mod_q": lrs.initial[0] % q,
+    }
+
+
 def deterministic_candidate_zero_test(
     lrs: LinearRecurrenceSequence,
     n: int,
@@ -543,9 +648,10 @@ def deterministic_candidate_zero_test(
     Combined deterministic zero test for a candidate index n = M*z + ell produced by ZeroSearch:
     1. If n <= exact_threshold, evaluate u_n exactly.
     2. Run unconditional unit-root zero-bound test (Theorems 5 & 6, k_q = 1, Lean-verified).
-    3. Run non-branching p-adic Hensel depth extension (r = R + 3).
-    4. Run dyadic interval matrix exponentiation (Lemma 2 & Archimedean Branch of Theorems 3-4).
-    5. Run heuristic D^nu / D_{<=2}^nu modular check + multi-prime / single-prime-power checks.
+    3. Run Route E2 sound large-prime rejection filter (z_n mod D_unit / D_{<=2}).
+    4. Run non-branching p-adic Hensel depth extension (r = R + 3).
+    5. Run dyadic interval matrix exponentiation (Lemma 2 & Archimedean Branch of Theorems 3-4).
+    6. Run heuristic D^nu / D_{<=2}^nu modular check + multi-prime / single-prime-power checks.
     """
     if n <= exact_threshold:
         return lrs.term(n) == 0
@@ -553,6 +659,9 @@ def deterministic_candidate_zero_test(
     ur_verdict = unit_root_zero_bound_test(lrs, n)
     if ur_verdict is not None:
         return ur_verdict
+
+    if e2_large_prime_rejection_filter(lrs, n) is False:
+        return False
 
     if not hensel_depth_extension_test(lrs, n, p, M, R, extra_steps=3):
         return False

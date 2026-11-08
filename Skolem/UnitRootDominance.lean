@@ -1,3 +1,4 @@
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.RingTheory.Coprime.Lemmas
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.LinearCombination
@@ -240,7 +241,165 @@ theorem order4_unit_root_zero_bound
   have hnd := window_climb_zero_bound u w q m 3 hwin hfrozen k hk
   exact ⟨hnd, fun hz => hnd (by rw [hz]; exact dvd_zero _)⟩
 
-/-! ## 4. A concrete factorization-free instance (composite `q = 15`) -/
+/-! ## 4. General Order `d = r + 1` (via `Finset` sums) -/
+
+open BigOperators Finset
+
+/-- Extended coefficient of `g(x) = x^r + ∑_{i < r} s_i x^i`: `1` at degree `r`, `s i` below `r`. -/
+def unitQuotCoeff (s : ℕ → ℤ) (r j : ℕ) : ℤ :=
+  if j = r then 1 else s j
+
+/-- Shifted coefficient of `x * g(x)` below degree `r + 1`: `0` at `j = 0`, `s (j - 1)` for `j ≥ 1`. -/
+def unitQuotShift (s : ℕ → ℤ) (j : ℕ) : ℤ :=
+  if j = 0 then 0 else s (j - 1)
+
+/--
+**General Order-`d` (`d = r + 1`) Unit-Root Zero Bound (`k_q = 1`).**
+Let `u` satisfy the order-`(r + 1)` recurrence `u (k + r + 1) = - ∑ j ∈ range (r + 1), b j * u (k + j)`
+with characteristic polynomial `x^(r+1) + ∑_{j ≤ r} b_j x^j`.
+Suppose `q, μ ∈ ℤ`, `s : ℕ → ℤ`, and `m ∈ ℕ` satisfy:
+- For every `j ≤ r`, `q^(m+1)` divides the coefficient difference between `χ(x)` and
+  `(x - μ)(x^r + ∑_{i < r} s_i x^i)` at degree `j`, namely
+  `b j - (unitQuotShift s j - μ * unitQuotCoeff s r j)`;
+- For every `i < r`, `q ∣ s i`;
+- `IsCoprime μ q`;
+- `q^m ∥ w 0`, where `w k = u (k + r) + ∑ i ∈ range r, s i * u (k + i)`.
+
+Then `q^(m+1) ∤ u k` and `u k ≠ 0` for all `k ≥ r * (m + 1)`.
+-/
+theorem order_d_unit_root_zero_bound
+    (u b s : ℕ → ℤ) (q μ : ℤ) (r m : ℕ)
+    (hrec : ∀ k, u (k + r + 1) = - ∑ j ∈ range (r + 1), b j * u (k + j))
+    (hc : ∀ j < r + 1, q ^ (m + 1) ∣ b j - (unitQuotShift s j - μ * unitQuotCoeff s r j))
+    (hs : ∀ i < r, q ∣ s i)
+    (hcop : IsCoprime μ q)
+    (hw0 : q ^ m ∣ u r + ∑ i ∈ range r, s i * u i)
+    (hw0' : ¬ q ^ (m + 1) ∣ u r + ∑ i ∈ range r, s i * u i) :
+    ∀ k, r * (m + 1) ≤ k → ¬ q ^ (m + 1) ∣ u k ∧ u k ≠ 0 := by
+  set w : ℕ → ℤ := fun k => u (k + r) + ∑ i ∈ range r, s i * u (k + i) with hw_def
+  have hw_sum : ∀ k, w k = ∑ j ∈ range (r + 1), unitQuotCoeff s r j * u (k + j) := by
+    intro k
+    rw [hw_def, sum_range_succ]
+    have htop : unitQuotCoeff s r r * u (k + r) = u (k + r) := by
+      simp [unitQuotCoeff]
+    have hlow : ∑ j ∈ range r, unitQuotCoeff s r j * u (k + j) =
+        ∑ i ∈ range r, s i * u (k + i) := by
+      apply sum_congr rfl
+      intro j hj
+      have hjr : j ≠ r := ne_of_lt (mem_range.mp hj)
+      simp [unitQuotCoeff, hjr]
+    rw [htop, hlow, add_comm]
+  have hshift_sum : ∀ k, ∑ i ∈ range r, s i * u (k + 1 + i) =
+      ∑ j ∈ range (r + 1), unitQuotShift s j * u (k + j) := by
+    intro k
+    rw [sum_range_succ' (fun j => unitQuotShift s j * u (k + j)) r]
+    simp only [unitQuotShift, ↓reduceIte, zero_mul, add_zero, Nat.add_eq_zero_iff,
+      one_ne_zero, and_false, Nat.add_sub_cancel]
+    apply sum_congr rfl
+    intro i _
+    rw [show k + (i + 1) = k + 1 + i by ring]
+  have hgeom : ∀ k, q ^ (m + 1) ∣ w (k + 1) - μ * w k := by
+    intro k
+    have hid : w (k + 1) - μ * w k =
+        - ∑ j ∈ range (r + 1),
+            (b j - (unitQuotShift s j - μ * unitQuotCoeff s r j)) * u (k + j) := by
+      have hw1 : w (k + 1) = u (k + r + 1) + ∑ i ∈ range r, s i * u (k + 1 + i) := by
+        simp only [hw_def]
+        rw [show k + 1 + r = k + r + 1 by ring]
+      rw [hw1, hrec k, hshift_sum k, hw_sum k, mul_sum, ← sum_neg_distrib,
+        ← sum_add_distrib, ← sum_sub_distrib, ← sum_neg_distrib]
+      apply sum_congr rfl
+      intro j _
+      ring
+    rw [hid]
+    apply dvd_neg.mpr
+    apply dvd_sum
+    intro j hj
+    exact dvd_mul_of_dvd_left (hc j (mem_range.mp hj)) _
+  have hfrozen := unit_ratio_order_frozen w μ q m hgeom hcop
+    (by simpa [hw_def] using hw0) (by simpa [hw_def] using hw0')
+  have hwin : ∀ k j, (∀ i < r, q ^ j ∣ u (k + i)) → q ^ (j + 1) ∣ w k - u (k + r) := by
+    intro k j hj
+    have hdiff : w k - u (k + r) = ∑ i ∈ range r, s i * u (k + i) := by
+      simp only [hw_def]; ring
+    rw [hdiff]
+    apply dvd_sum
+    intro i hi
+    have hir : i < r := mem_range.mp hi
+    exact dvd_pow_succ_mul (hs i hir) (hj i hir)
+  intro k hk
+  have hnd := window_climb_zero_bound u w q m r hwin hfrozen k hk
+  exact ⟨hnd, fun hz => hnd (by rw [hz]; exact dvd_zero _)⟩
+
+/-! ## 5. Connection to the Slope-Normalized Sequence `z_k = S^(d-1-k) v_k` -/
+
+/--
+**Slope-normalization scaling identity (Order 3, `notes/deterministic_zero_testing.md` §4.1).**
+Suppose `v` satisfies `v (k+3) = -(b2 * v (k+2) + b1 * v (k+1) + b0 * v k)` where
+`b2 = S * b2_hat`, `b1 = S^2 * b1_hat`, `b0 = S^3 * b0_hat`, and `z` satisfies the normalized
+recurrence `z (k+3) = -(b2_hat * z (k+2) + b1_hat * z (k+1) + b0_hat * z k)` with initial values
+`z 0 = S^2 * v 0`, `z 1 = S * v 1`, `z 2 = v 2`.
+Then for every `k : ℕ`, `S^2 * v k = S^k * z k`.
+In particular, when `S ≠ 0`, `v k = 0 ↔ z k = 0` for all `k`.
+-/
+theorem order3_slope_normalization_scaling
+    (v z : ℕ → ℤ) (S b2_hat b1_hat b0_hat : ℤ)
+    (hv : ∀ k, v (k + 3) =
+      -((S * b2_hat) * v (k + 2) + (S ^ 2 * b1_hat) * v (k + 1) + (S ^ 3 * b0_hat) * v k))
+    (hz : ∀ k, z (k + 3) = -(b2_hat * z (k + 2) + b1_hat * z (k + 1) + b0_hat * z k))
+    (hz0 : z 0 = S ^ 2 * v 0)
+    (hz1 : z 1 = S * v 1)
+    (hz2 : z 2 = v 2) :
+    ∀ k, S ^ 2 * v k = S ^ k * z k := by
+  have hpair : ∀ k,
+      S ^ 2 * v k = S ^ k * z k ∧
+      S ^ 2 * v (k + 1) = S ^ (k + 1) * z (k + 1) ∧
+      S ^ 2 * v (k + 2) = S ^ (k + 2) * z (k + 2) := by
+    intro k
+    induction k with
+    | zero =>
+      refine ⟨?_, ?_, ?_⟩
+      · rw [hz0]; ring
+      · rw [hz1]; ring
+      · rw [hz2]
+    | succ k ih =>
+      obtain ⟨ih0, ih1, ih2⟩ := ih
+      refine ⟨ih1, ih2, ?_⟩
+      rw [show k + 1 + 2 = k + 3 by ring, hv k, hz k]
+      linear_combination
+        -S * b2_hat * ih2 - S ^ 2 * b1_hat * ih1 - S ^ 3 * b0_hat * ih0
+  exact fun k => (hpair k).1
+
+/--
+When `S ≠ 0`, slope normalization preserves zeros (`v k = 0 ↔ z k = 0`), so Theorem 5 applied to
+the normalized sequence `z` transfers immediately to `v k ≠ 0` for all `k ≥ 2 * (m + 1)`.
+-/
+theorem order3_normalized_unit_root_zero_bound
+    (v z : ℕ → ℤ) (S b2_hat b1_hat b0_hat q μ s t : ℤ) (m : ℕ)
+    (hS : S ≠ 0)
+    (hv : ∀ k, v (k + 3) =
+      -((S * b2_hat) * v (k + 2) + (S ^ 2 * b1_hat) * v (k + 1) + (S ^ 3 * b0_hat) * v k))
+    (hz : ∀ k, z (k + 3) = -(b2_hat * z (k + 2) + b1_hat * z (k + 1) + b0_hat * z k))
+    (hz0 : z 0 = S ^ 2 * v 0) (hz1 : z 1 = S * v 1) (hz2 : z 2 = v 2)
+    (hc2 : q ^ (m + 1) ∣ b2_hat - (s - μ))
+    (hc1 : q ^ (m + 1) ∣ b1_hat - (t - μ * s))
+    (hc0 : q ^ (m + 1) ∣ b0_hat + μ * t)
+    (hs : q ∣ s) (ht : q ∣ t) (hcop : IsCoprime μ q)
+    (hw0 : q ^ m ∣ z 2 + s * z 1 + t * z 0)
+    (hw0' : ¬ q ^ (m + 1) ∣ z 2 + s * z 1 + t * z 0) :
+    ∀ k, 2 * (m + 1) ≤ k → v k ≠ 0 := by
+  have hscale := order3_slope_normalization_scaling v z S b2_hat b1_hat b0_hat hv hz hz0 hz1 hz2
+  have hz_nz := order3_unit_root_zero_bound z b2_hat b1_hat b0_hat q μ s t m
+    hz hc2 hc1 hc0 hs ht hcop hw0 hw0'
+  intro k hk hvk
+  have hzk : z k ≠ 0 := (hz_nz k hk).2
+  have hmul : S ^ k * z k = 0 := by
+    rw [← hscale k, hvk, mul_zero]
+  rcases mul_eq_zero.mp hmul with hSk | hzk0
+  · exact pow_ne_zero k hS hSk
+  · exact hzk hzk0
+
+/-! ## 6. A concrete factorization-free instance (composite `q = 15`) -/
 
 /--
 `u (k+3) = u (k+2) - 15 u (k+1) - 15 u k`, `u 0 = 0, u 1 = 0, u 2 = 1`

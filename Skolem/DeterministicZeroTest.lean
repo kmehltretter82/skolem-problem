@@ -209,7 +209,7 @@ theorem soda2026_ghost_root_verified :
     soda2026Seq 19 ≠ 0 := by
   decide
 
-/-! ## 5. Theorems 3 & 4: Closing the Transition Window via Global-Local Dichotomy -/
+/-! ## 5. Zero-Bound Deductions from Spectral Gaps + Two-Term Baker / Yu Bounds -/
 
 /--
 **Theorem 3A (Order-3 Smyth Mahler-Measure Consecutive Spectral Gap):**
@@ -240,13 +240,106 @@ theorem smyth_mahler_measure_consecutive_gap_order4
   omega
 
 /--
-**Theorem 3B / 4B (Factorization-Free Composite Modulus Zero Test):**
-Suppose `D` is the explicit rational denominator of the root-power polynomial `P_ξ(t)` (or `D_{≤2}`
-at Order 4), and there exists an (unknown) prime factor `q ∣ D` at which the `q`-adic Newton
-polygon has `k_q ≤ 2` dominant roots of valuation `0`, so Yu's `p`-adic Baker bound guarantees
-`¬ ((q : ℤ) ^ ν ∣ u m)` for all `m ≤ N` with `u m ≠ 0`.
-Then testing `u n` modulo the unfactored composite power `(D : ℤ) ^ ν` is exact:
-`u n = 0 ↔ (D : ℤ) ^ ν ∣ u n`.
+**Archimedean Two-Term Baker + Spectral Gap ⇒ Zero Bound (`notes/deterministic_zero_testing.md` §4.3):**
+Suppose `u k = A_dom k + B_sub k` is split into a `1`- or `2`-root dominant block `A_dom k` and a
+subdominant tail `B_sub k` across a consecutive log-modulus gap `δ_gap`.
+Suppose the two-logarithm Baker bound (or Liouville bound when `k_∞ = 1`) together with the tail
+estimate implies that whenever `|A_dom k| = |B_sub k|` at index `k`, we have
+`k * δ_gap ≤ B_baker k`, and suppose we have a lower bound `δ_min ≤ δ_gap`.
+Then for every `k : ℕ` with `B_baker k < (k : ℤ) * δ_min`, we have `u k ≠ 0`.
+-/
+theorem archimedean_gap_zero_bound
+    (u A_dom B_sub : ℕ → ℤ) (B_baker : ℕ → ℤ) (δ_gap δ_min : ℤ)
+    (h_split : ∀ k, u k = A_dom k + B_sub k)
+    (h_baker : ∀ k, |A_dom k| = |B_sub k| → (k : ℤ) * δ_gap ≤ B_baker k)
+    (h_gap : δ_min ≤ δ_gap) :
+    ∀ k : ℕ, B_baker k < (k : ℤ) * δ_min → u k ≠ 0 := by
+  intro k hk hz
+  have hsum : A_dom k + B_sub k = 0 := by rw [← h_split k, hz]
+  have habs : |A_dom k| = |B_sub k| := by
+    have : A_dom k = -B_sub k := by omega
+    rw [this, abs_neg]
+  have hle := h_baker k habs
+  have hk_nonneg : (0 : ℤ) ≤ (k : ℤ) := Int.natCast_nonneg k
+  have hmul : (k : ℤ) * δ_min ≤ (k : ℤ) * δ_gap := mul_le_mul_of_nonneg_left h_gap hk_nonneg
+  omega
+
+/--
+**Theorem 3′ Deduction (Order-3 Unit Branch `D = 1` Zero Bound from Smyth + Two-Term Baker):**
+Combining `smyth_mahler_measure_consecutive_gap_order3` with `archimedean_gap_zero_bound` on
+whichever consecutive gap (`L_1 - L_2` for `k_∞ = 1`, or `L_2 - L_3` for `k_∞ = 2`) is at least
+`γ_smyth / 4`: if any zero `u k = 0` under a gap `δ` forces `(k : ℤ) * δ ≤ B_baker k`, then
+`u k ≠ 0` for all `k` with `4 * B_baker k < (k : ℤ) * γ_smyth`.
+-/
+theorem order3_unit_branch_smyth_baker_zero_bound
+    (u : ℕ → ℤ) (B_baker : ℕ → ℤ) (L_1 L_2 L_3 log_M γ_smyth : ℤ)
+    (h_mahler : log_M ≤ 2 * (L_1 - L_3))
+    (h_smyth : γ_smyth ≤ log_M)
+    (h_baker_k1 : ∀ k : ℕ, u k = 0 → (k : ℤ) * (L_1 - L_2) ≤ B_baker k)
+    (h_baker_k2 : ∀ k : ℕ, u k = 0 → (k : ℤ) * (L_2 - L_3) ≤ B_baker k) :
+    ∀ k : ℕ, 4 * B_baker k < (k : ℤ) * γ_smyth → u k ≠ 0 := by
+  intro k hk hz
+  have hgap := smyth_mahler_measure_consecutive_gap_order3 L_1 L_2 L_3 log_M γ_smyth h_mahler h_smyth
+  have hk_nonneg : (0 : ℤ) ≤ (k : ℤ) := Int.natCast_nonneg k
+  rcases hgap with h12 | h23
+  · have hb := h_baker_k1 k hz
+    have hm : (k : ℤ) * γ_smyth ≤ (k : ℤ) * (4 * (L_1 - L_2)) :=
+      mul_le_mul_of_nonneg_left h12 hk_nonneg
+    linarith
+  · have hb := h_baker_k2 k hz
+    have hm : (k : ℤ) * γ_smyth ≤ (k : ℤ) * (4 * (L_2 - L_3)) :=
+      mul_le_mul_of_nonneg_left h23 hk_nonneg
+    linarith
+
+/--
+**Non-Archimedean Two-Root (`k_q = 2`) + Yu's Bound ⇒ Zero Bound (`notes/deterministic_zero_testing.md` §4.4):**
+Suppose `u k = A_dom k + B_sub k` where at a prime (or prime ideal) `q`, the subdominant tail
+satisfies `q ^ (ν k) ∣ B_sub k` for all `k ≥ B_zero` (since its roots have positive `q`-adic slope),
+while Yu's two-logarithm `p`-adic bound ensures `¬ q ^ (ν k) ∣ A_dom k` for all `k ≥ B_zero`
+(once the linear valuation growth `ν k` of the tail overtakes the logarithmic bound `C_yu * q^f * log k`).
+Then `¬ q ^ (ν k) ∣ u k` and hence `u k ≠ 0` for all `k ≥ B_zero`.
+-/
+theorem padic_two_root_yu_zero_bound
+    (u A_dom B_sub : ℕ → ℤ) (q : ℤ) (ν : ℕ → ℕ) (B_zero : ℕ)
+    (h_split : ∀ k, u k = A_dom k + B_sub k)
+    (h_tail : ∀ k, B_zero ≤ k → q ^ (ν k) ∣ B_sub k)
+    (h_yu : ∀ k, B_zero ≤ k → ¬ q ^ (ν k) ∣ A_dom k) :
+    ∀ k, B_zero ≤ k → ¬ q ^ (ν k) ∣ u k ∧ u k ≠ 0 := by
+  intro k hk
+  have hnd : ¬ q ^ (ν k) ∣ u k := by
+    intro hdvd
+    apply h_yu k hk
+    have heq : A_dom k = u k - B_sub k := by rw [h_split k]; ring
+    rw [heq]
+    exact dvd_sub hdvd (h_tail k hk)
+  exact ⟨hnd, fun hz => hnd (by rw [hz]; exact dvd_zero _)⟩
+
+/--
+**Subfield Norm Identity for `k_q = 2` at Order 3 (`notes/deterministic_zero_testing.md` §4.6):**
+For any three terms `x, y, z` (such as `x = c_1 μ_1^k, y = c_2 μ_2^k, z = c_3 μ_3^k`),
+the product of the three two-term sums `(x + y)(y + z)(z + x)` (which is the field norm
+`N_{F/ℚ}(c_1 μ_1^k + c_2 μ_2^k)` in the cubic subfield `F = ℚ(μ_3)`) satisfies
+`(x + y)(y + z)(z + x) = (x + y + z)(x y + y z + z x) - x y z`.
+-/
+theorem cubic_two_sum_norm_identity {R : Type*} [CommRing R] (x y z : R) :
+    (x + y) * (y + z) * (z + x) = (x + y + z) * (x * y + y * z + z * x) - x * y * z := by
+  ring
+
+/--
+**Monomial Collapse of the Subfield Norm at a Zero (`u_k = x + y + z = 0`):**
+Whenever `x + y + z = 0`, the product of the three conjugate two-term sums collapses identically
+to the monomial `-x * y * z` (`= -c_1 c_2 c_3 (-b_0)^k`), explaining why the naive global norm bound
+`|N_{F/ℚ}(Z_k)|_∞ ≥ q^{v_q(Z_k)}` reduces at `u_k = 0` to the tautological product formula on `-z`.
+-/
+theorem cubic_two_sum_norm_at_zero {R : Type*} [CommRing R] (x y z : R) (hz : x + y + z = 0) :
+    (x + y) * (y + z) * (z + x) = -(x * y * z) := by
+  rw [cubic_two_sum_norm_identity, hz, zero_mul, zero_sub]
+
+/--
+*(Superseded by the zero-bound theorems in `Skolem/UnitRootDominance.lean` and above; retained for
+backwards compatibility.)*
+Suppose `D` has a prime factor `q ∣ D` at which `¬ ((q : ℤ) ^ ν ∣ u m)` for all `m ≤ N` with `u m ≠ 0`.
+Then `u n = 0 ↔ (D : ℤ) ^ ν ∣ u n`.
 -/
 theorem factorization_free_composite_power_test_iff
     (u : ℕ → ℤ) (D q ν N n : ℕ)
@@ -265,13 +358,9 @@ theorem factorization_free_composite_power_test_iff
     exact h_yu_padic n hn hne (dvd_trans hq_pow hD_dvd)
 
 /--
-**Theorem 3 (Combined Global-Local Dichotomy Soundness at Order 3):**
-For any candidate `n ≤ N` of a normalized Order-3 LRS `u`:
-- Either `D = 1` (Archimedean Unit Branch), where for every `u n ≠ 0` the dyadic interval enclosure
-  `I` separates `u n` from `0` (`0 < I.lo ∨ I.hi < 0`), or
-- `D > 1` (Non-Archimedean Newton-Polygon Branch), where some prime `q ∣ D` satisfies Yu's bound
-  `u n ≠ 0 → ¬ ((q : ℤ) ^ ν ∣ u n)`.
-Then `u n = 0` if and only if BOTH `I.contains 0` AND `(D : ℤ) ^ ν ∣ u n`.
+*(Superseded by the zero-bound theorems in `Skolem/UnitRootDominance.lean` and above; retained for
+backwards compatibility.)*
+Combined conditional equivalence wrapper for Order-3 `D = 1` vs `D > 1`.
 -/
 theorem order3_global_local_dichotomy_iff
     (u : ℕ → ℤ) (D ν N n : ℕ) (I : DyadicInterval)

@@ -542,13 +542,17 @@ def deterministic_candidate_zero_test(
     """
     Combined deterministic zero test for a candidate index n = M*z + ell produced by ZeroSearch:
     1. If n <= exact_threshold, evaluate u_n exactly.
-    2. Run non-branching p-adic Hensel depth extension (r = R + 3).
-    3. Run dyadic interval matrix exponentiation (Lemma 2 & Archimedean Branch of Theorems 3-4).
-    4. Run factorization-free D^nu / D_{<=2}^nu Newton-polygon test (Non-Archimedean Branch of Theorems 3-4).
-    5. Run multi-prime modular check + single-prime-power check (Lemma 1).
+    2. Run unconditional unit-root zero-bound test (Theorems 5 & 6, k_q = 1, Lean-verified).
+    3. Run non-branching p-adic Hensel depth extension (r = R + 3).
+    4. Run dyadic interval matrix exponentiation (Lemma 2 & Archimedean Branch of Theorems 3-4).
+    5. Run heuristic D^nu / D_{<=2}^nu modular check + multi-prime / single-prime-power checks.
     """
     if n <= exact_threshold:
         return lrs.term(n) == 0
+
+    ur_verdict = unit_root_zero_bound_test(lrs, n)
+    if ur_verdict is not None:
+        return ur_verdict
 
     if not hensel_depth_extension_test(lrs, n, p, M, R, extra_steps=3):
         return False
@@ -818,14 +822,41 @@ def check_unit_root_certificate(lrs: LinearRecurrenceSequence, cert: Dict[str, o
     return w0 % (q ** m) == 0 and w0 % Q != 0
 
 
+def slope_normalize_lrs(lrs: LinearRecurrenceSequence) -> Tuple[int, LinearRecurrenceSequence]:
+    """
+    Section 4.1 / `order3_slope_normalization_scaling`:
+    Given u_{n+d} = a_{d-1} u_{n+d-1} + ... + a_0 u_n (with b_i = -a_i),
+    computes the coprime-base slope scalar S and the normalized integer sequence
+        z_k = S^{d-1-k} u_k
+    satisfying z_{k+d} = sum_i hat_a_i z_{k+i} (hat_b_{d-r} = b_{d-r} // S^r)
+    with initial values z_j = S^{d-1-j} u_j for 0 <= j < d.
+    Since S != 0, S^{d-1} u_k = S^k z_k implies u_k == 0 iff z_k == 0 for all k >= 0.
+    """
+    d = lrs.order
+    b_low = _char_poly_low_coeffs(lrs)  # [b_0, ..., b_{d-1}]
+    b_desc = list(reversed(b_low))      # [b_{d-1}, ..., b_0]
+    S, hat_b_desc = normalize_newton_polygon_coeffs(b_desc)
+    if S <= 1:
+        return 1, lrs
+    hat_b_low = list(reversed(hat_b_desc))
+    hat_coeffs = [-hb for hb in hat_b_low]
+    hat_initial = [(S ** (d - 1 - j)) * lrs.initial[j] for j in range(d)]
+    return S, LinearRecurrenceSequence(coeffs=hat_coeffs, initial=hat_initial)
+
+
 def unit_root_zero_bound_test(lrs: LinearRecurrenceSequence, n: int) -> Optional[bool]:
     """
-    Deterministic zero test via Theorems 5/6: if a k_q = 1 certificate exists, then
-    u_n != 0 for n >= zero_bound, and for n < zero_bound we evaluate u_n exactly
+    Deterministic zero test via Theorems 5/6 (and `order3_normalized_unit_root_zero_bound`):
+    if a k_q = 1 certificate exists on `lrs` or on its slope-normalized sequence `z`,
+    then u_n != 0 for n >= zero_bound, and for n < zero_bound we evaluate u_n exactly
     (zero_bound is polynomial in the input size, so u_n has polynomially many bits).
     Returns True iff u_n == 0, or None if no certificate is available.
     """
     cert = unit_root_certificate(lrs)
+    if cert is None:
+        S, z_lrs = slope_normalize_lrs(lrs)
+        if S > 1:
+            cert = unit_root_certificate(z_lrs)
     if cert is None:
         return None
     if n >= int(cert["zero_bound"]):

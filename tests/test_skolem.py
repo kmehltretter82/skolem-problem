@@ -17,9 +17,11 @@ from src.deterministic_zero_test import (
     order3_global_local_dichotomy,
     order4_global_local_dichotomy,
     single_prime_power_zero_test,
+    slope_normalize_lrs,
     solve_bounded_skolem_deterministic,
     unit_root_certificate,
     check_unit_root_certificate,
+    unit_root_modulus,
     unit_root_zero_bound_test,
 )
 from src.skolem_algorithm import LinearRecurrenceSequence
@@ -151,6 +153,31 @@ class TestSkolemAlgorithm(unittest.TestCase):
         # No k_q = 1 modulus: q | b2 as well
         self.assertIsNone(unit_root_certificate(
             LinearRecurrenceSequence(coeffs=[-15, -15, 15], initial=[0, 0, 1])))
+
+    def test_slope_normalized_unit_root_and_open_class(self) -> None:
+        # 1. Slope-normalized sequence z_k = S^{d-1-k} v_k (matching `order3_slope_normalization_scaling`):
+        # Take unitRootExampleSeq (chi = x^3 - x^2 + 15x + 15) scaled by S = 15:
+        # b2 = -15, b1 = 3375, b0 = 50625 => coeffs = [-50625, -3375, 15], initial = [0, 0, 1]
+        v_lrs = LinearRecurrenceSequence(coeffs=[-50625, -3375, 15], initial=[0, 0, 1])
+        self.assertIsNone(unit_root_certificate(v_lrs))  # Raw b2=-15 shares all primes (3, 5) with b1, b0
+        S, z_lrs = slope_normalize_lrs(v_lrs)
+        self.assertEqual(S, 15)
+        self.assertEqual(z_lrs.coeffs, [-15, -15, 1])
+        for k in range(15):
+            self.assertEqual((S ** 2) * v_lrs.term(k), (S ** k) * z_lrs.term(k))
+        self.assertIs(unit_root_zero_bound_test(v_lrs, 0), True)
+        self.assertIs(unit_root_zero_bound_test(v_lrs, 2), False)
+        self.assertIs(unit_root_zero_bound_test(v_lrs, 10**20), False)
+
+        # 2. Step B4 Order-3 open residual class instance:
+        # g_{9, -2}(x) = (x - 9)(x^2 + x + 81) + 2 = x^3 - 8 x^2 + 72 x - 727 (q = 727 prime)
+        N, c = 9, -2
+        b2, b1, b0 = -(N - 1), N * (N - 1), -(N ** 3 + c)
+        open_lrs = LinearRecurrenceSequence(coeffs=[-b0, -b1, -b2], initial=[0, 1, N])
+        info = order3_global_local_dichotomy(b2, b1, b0)
+        self.assertEqual(info["S"], 1)
+        self.assertEqual(unit_root_modulus(open_lrs), 1)
+        self.assertEqual(info["D"], 727 ** 2)
 
 
 if __name__ == "__main__":

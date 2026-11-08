@@ -9,7 +9,9 @@ from src.deterministic_zero_test import (
     construct_ghost_root_counterexamples,
     construct_pisano_counterexample,
     coprime_base,
+    compute_m0_without_factoring,
     dyadic_interval_zero_test,
+    e2_cached_collision_reject,
     e2_large_prime_rejection_filter,
     e2_odd_order_trace_certificate,
     factorization_free_D_nu_zero_test,
@@ -207,6 +209,26 @@ class TestSkolemAlgorithm(unittest.TestCase):
         self.assertIsNotNone(odd_cert)
         self.assertEqual(odd_cert["m_odd"], 7)
         self.assertEqual(odd_cert["u0_mod_q"], 3)
+
+        # 4. Route E2 branch-collision & isolated 29^2-divisible candidate example:
+        # g_{3, +2}(x) = x^3 - 2 x^2 + 6 x - 29, initial = (1, 0, 1), p = 5, M = 62, ell = 18
+        m0_info = compute_m0_without_factoring(-2, 6, -29, q=29, K=4)
+        self.assertIsNotNone(m0_info)
+        self.assertEqual(m0_info["m0"], 1)
+        self.assertTrue(m0_info["exact"])
+
+        g3_101 = LinearRecurrenceSequence(coeffs=[29, -6, 2], initial=[1, 0, 1])
+        self.assertEqual(g3_101.term(914146, mod=29), 1)
+        self.assertEqual(g3_101.term(1882896, mod=29 ** 3), 2 * (29 ** 2))
+        self.assertEqual(g3_101.term(21257896, mod=29), 28)
+        self.assertIs(
+            e2_cached_collision_reject(-2, 6, -29, q=29, m_prec=1, n_old=1882896, n_new=21257896),
+            False,
+        )
+        self.assertIs(
+            e2_cached_collision_reject(-2, 6, -29, q=29, m_prec=2, n_old=1882896, n_new=21257896),
+            False,
+        )
 
 
 if __name__ == "__main__":

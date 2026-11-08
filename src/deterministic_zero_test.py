@@ -636,6 +636,128 @@ def e2_odd_order_trace_certificate(
     }
 
 
+def _lift_root_near_zero_and_quadratic_quotient(
+    b2: int, b1: int, b0: int, q: int, K: int
+) -> Optional[Tuple[int, int, int]]:
+    """
+    For g(x) = x^3 + b2 x^2 + b1 x + b0 with q | b0 and gcd(b1, q) = 1:
+    Hensel-lifts the simple root r == 0 (mod q) to precision mod = q^K and factors
+      g(x) == (x - r)(x^2 + a x + b) (mod q^K),
+    returning `(r, a, b)` modulo `q^K`.
+    """
+    if K < 1 or q <= 2 or b0 % q != 0 or math.gcd(b1, q) != 1:
+        return None
+    mod = q ** K
+    r = 0
+    cur_prec = 1
+    while cur_prec < K:
+        cur_prec = min(K, cur_prec * 2)
+        cur_mod = q ** cur_prec
+        g_val = (r * r * r + b2 * r * r + b1 * r + b0) % cur_mod
+        gp_val = (3 * r * r + 2 * b2 * r + b1) % cur_mod
+        r = (r - g_val * pow(gp_val, -1, cur_mod)) % cur_mod
+    a = (b2 + r) % mod
+    b = (b1 + a * r) % mod
+    return r, a, b
+
+
+def _quad_quotient_pow(
+    c0: int, c1: int, exp: int, a: int, b: int, mod: int
+) -> Tuple[int, int]:
+    """
+    Compute `(c0 + c1 X)^exp` in `(Z/mod Z)[X] / (X^2 + a X + b)`.
+    Since X^2 == -b - a X:
+      (u0 + u1 X)(v0 + v1 X) = (u0 v0 - b u1 v1) + (u0 v1 + u1 v0 - a u1 v1) X.
+    """
+    r0, r1 = 1 % mod, 0
+    u0, u1 = c0 % mod, c1 % mod
+    e = exp
+    while e > 0:
+        if e & 1:
+            nr0 = (r0 * u0 - b * r1 * u1) % mod
+            nr1 = (r0 * u1 + r1 * u0 - a * r1 * u1) % mod
+            r0, r1 = nr0, nr1
+        nu0 = (u0 * u0 - b * u1 * u1) % mod
+        nu1 = (2 * u0 * u1 - a * u1 * u1) % mod
+        u0, u1 = nu0, nu1
+        e >>= 1
+    return r0, r1
+
+
+def compute_m0_without_factoring(
+    b2: int, b1: int, b0: int, q: int, K: int = 6
+) -> Optional[Dict[str, object]]:
+    """
+    Route E2 Factorization-Free Computation of `m_0 = v_q(xi^T - 1)` (§4.6.5, Eq. 12):
+    In `A_K = (Z/q^K Z)[X] / (X^2 + a X + b)`, the two unit roots are `X` and `-a - X`
+    with product `b`, so their ratio is represented by
+      xi = X / (-a - X) = X^2 / b == -1 - (a * b^{-1}) X (mod q^K).
+    Because `T = ord(bar(xi))` divides `E = q^2 - 1` and `q ∤ (q^2 - 1)/T`, Eq. (2) gives
+      v_q(xi^{q^2 - 1} - 1) = m_0
+    up to precision `K`, without factoring `q - 1` or `q + 1` and without computing `T`!
+    Returns `{'q': q, 'K': K, 'm0': m0, 'exact': m0 < K, 'xi_coeff': (xi0, xi1)}`.
+    """
+    lifted = _lift_root_near_zero_and_quadratic_quotient(b2, b1, b0, q, K)
+    if lifted is None:
+        return None
+    r, a, b = lifted
+    mod = q ** K
+    if math.gcd(b, q) != 1:
+        return None
+    b_inv = pow(b, -1, mod)
+    xi0 = (-1) % mod
+    xi1 = (-a * b_inv) % mod
+    E = q * q - 1
+    p0, p1 = _quad_quotient_pow(xi0, xi1, E, a, b, mod)
+    d0 = (p0 - 1) % mod
+    d1 = p1 % mod
+    m0 = min(v_p(d0, q, K), v_p(d1, q, K))
+    return {
+        "q": q,
+        "K": K,
+        "m0": m0,
+        "exact": m0 < K,
+        "r_mod_qK": r,
+        "xi_coeff": (xi0, xi1),
+    }
+
+
+def e2_cached_collision_reject(
+    b2: int,
+    b1: int,
+    b0: int,
+    q: int,
+    m_prec: int,
+    n_old: int,
+    n_new: int,
+) -> Optional[bool]:
+    """
+    Route E2 Cached Candidate Rejection Rule (§4.6.5, Eq. 13):
+    Suppose candidate `n_old` has already passed modulo `q^{m_prec}` (`q^{m_prec} | u_{n_old}`)
+    with `1 <= m_prec <= min(n_old, n_new)` and unit Binet coefficients `c_1, c_2` at `q`.
+    For a later candidate `n_new > n_old`, computes `xi^{n_new - n_old} - 1` in
+    `A_{m_prec} = (Z/q^{m_prec} Z)[X] / (X^2 + a X + b)` in `O(log(n_new - n_old))` operations
+    **without evaluating `u_{n_new}`**.
+      - Returns `False` (certifying `u_{n_new} != 0`) if `xi^{n_new - n_old} != 1 (mod q^{m_prec})`.
+      - Returns `None` if `xi^{n_new - n_old} == 1 (mod q^{m_prec})`.
+    """
+    if m_prec < 1 or n_new <= n_old or m_prec > min(n_old, n_new):
+        return None
+    lifted = _lift_root_near_zero_and_quadratic_quotient(b2, b1, b0, q, m_prec)
+    if lifted is None:
+        return None
+    _, a, b = lifted
+    mod = q ** m_prec
+    b_inv = pow(b, -1, mod)
+    xi0 = (-1) % mod
+    xi1 = (-a * b_inv) % mod
+    delta = n_new - n_old
+    p0, p1 = _quad_quotient_pow(xi0, xi1, delta, a, b, mod)
+    if (p0 - 1) % mod != 0 or p1 % mod != 0:
+        return False
+    return None
+
+
 def deterministic_candidate_zero_test(
     lrs: LinearRecurrenceSequence,
     n: int,

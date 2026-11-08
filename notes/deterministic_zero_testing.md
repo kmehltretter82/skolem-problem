@@ -337,6 +337,46 @@ Rather than bounding all zeros unconditionally, Route E2 exploits the certified 
    > $$u_n \ne 0 \quad \Longrightarrow \quad v_p(u_n) < P(\mathcal{L}) \;\;\text{or}\;\; v_q(u_n) < Q(\mathcal{L}).$$
    When this holds, `e2_candidate_dual_prime_zero_test_iff` gives $u_n = 0 \iff \big(u_n \equiv 0 \pmod{p^{P(\mathcal{L})}} \wedge u_n \equiv 0 \pmod{q^{Q(\mathcal{L})}}\big)$ in deterministic $\mathrm{poly}(\mathcal{L})$ time. Until proved in full generality, `e2_large_prime_rejection_filter` implements the sound 4-step rejection filter (returning `False` when $u_n \not\equiv 0 \pmod{q^m}$ and `None` when $u_n \equiv 0 \pmod{q^m}$).
 
+#### 4.6.5 Branch-Collision Theory, Consecutive-Active-Lift Theorem, Factorization-Free $m_0$ & Cached Rejection, and the $(1,0,1)$ Example
+
+Comparing distinct truncations along the same $p$-adic ghost-root branch yields a strong unconditional sparsity and rejection theorem:
+
+1. **Unit-Pair Collision Lemma & Local Order-Lifting Law [Lean: `e2_unit_pair_collision_identity`, `e2_unit_pair_collision_dvd`]:**
+   At an odd prime $q$ where $v_q(\mu_1) = v_q(\mu_2) = 0$, $v_q(\mu_3) = 1$, $v_q(c_1) = v_q(c_2) = 0$, and $a_3 = v_q(c_3) \ge 0$ (which holds in an unramified extension of degree $\le 2$ over $\mathbb{Q}_q$ for $g_{N,\pm 2}$ since $\Delta_H = -(N-1)(3N+1)$ satisfies $0 < |\Delta_H| < q$ for $N \ge 3$), write $\xi = \mu_1/\mu_2$ and $\eta = -c_2/c_1$. For $1 \le m \le n + a_3$,
+   $$q^m \mid u_n \quad\Longleftrightarrow\quad \xi^n \equiv \eta \pmod{q^m}.$$
+   In division-free commutative-ring form (`e2_unit_pair_collision_identity`), eliminating $c_2 \mu_2^n$ between $u_n$ and $u_{n+\Delta}$ gives
+   $$(u_{n+\Delta} - \mu_2^\Delta u_n) - c_3 \mu_3^n (\mu_3^\Delta - \mu_2^\Delta) = c_1 \mu_1^n (\mu_1^\Delta - \mu_2^\Delta).$$
+   Let $T = \mathrm{ord}(\bar{\xi}) \mid (q \mp 1)$ and $m_0 = v_q(\xi^T - 1) \ge 1$. Since $q$ is odd and unramified with $q \nmid T$, lifting the exponent gives
+   $$v_q(\xi^\Delta - 1) = \begin{cases} 0, & T \nmid \Delta, \\ m_0 + v_q(\Delta), & T \mid \Delta, \end{cases} \qquad \mathrm{ord}_{q^m}(\xi) = T q^{\max(0, m - m_0)}.$$
+   Defining the truncated valuation $w_q(n) = \min(v_q(u_n), n)$, any two indices $n_1 < n_2$ ($\Delta = n_2 - n_1$) satisfy
+   $$\min(w_q(n_1), w_q(n_2)) \le v_q(\xi^{n_2 - n_1} - 1) \le m_0 + v_q(n_2 - n_1) \quad (\text{and } = 0 \text{ if } T \nmid n_2 - n_1).$$
+
+2. **Digit-Block Separation & Unrestricted Consecutive-Active-Lift Corollary [Lean: `e2_digit_block_separation_bound`, `e2_consecutive_active_lift_bound`, `gl3_F5_card_factored`]:**
+   - **Digit-block bound:** For two distinct canonical truncations $z_{R_1} < z_{R_2}$ ($h = R_2 - R_1$, $B = (z_{R_2} - z_{R_1})/p^{R_1} \in \{1, \dots, p^h - 1\}$, $n_{R_2} - n_{R_1} = M p^{R_1} B$), if both pass modulo $q^m$ ($m \le n_{R_1}$), then $T_* q^{\max(0, m - m_0 - v_q(M))} \mid B$ where $T_* = T / \gcd(T, M p^{R_1})$, forcing $p^h > T_* q^{\max(0, m - m_0 - v_q(M))}$ (`e2_digit_block_separation_bound`).
+   - **Consecutive active lifts (independent of intervening zero digits):** Let $j = J_R = \min\{i \ge R : d_i \ne 0\}$ be the next nonzero base-$p$ digit of the $p$-adic root $x_0$, so $n_{\mathrm{new}} - n_{\mathrm{old}} = M d_j p^j$ with $1 \le d_j \le p - 1$. Notice that the waiting position $j$ has $v_q(p^j) = 0$! Whenever $q > p$, $v_q(d_j) = 0$ as well, so $v_q(n_{\mathrm{new}} - n_{\mathrm{old}}) = v_q(M)$ **regardless of how many zero base-$p$ digits separated $n_{\mathrm{old}}$ and $n_{\mathrm{new}}$** (`e2_consecutive_active_lift_bound`):
+     $$\min\!\big(v_q(u_{n_{\mathrm{old}}}),\, v_q(u_{n_{\mathrm{new}}}),\, n_{\mathrm{old}}\big) \le m_0 + v_q(M).$$
+   - **For the prime-$q$ family $g_{N,\pm 2}$ with $p = 5$:** Because $M \mid |\mathrm{GL}_3(\mathbb{F}_5)| = 2^7 \cdot 3 \cdot 5^3 \cdot 31$ (`gl3_F5_card_factored`) and $q = N^3 \pm 2 \ge 29$ cannot equal $31$, we have $q \nmid M$ ($v_q(M) = 0$), yielding the unconditional **Consecutive-Active-Lift Corollary**:
+     $$\boxed{\min\!\big(v_q(u_{n_{\mathrm{old}}}),\, v_q(u_{n_{\mathrm{new}}}),\, n_{\mathrm{old}}\big) \le m_0.}$$
+     Once $n_{\mathrm{old}} > m_0$, two consecutive active candidates can **never** both pass modulo $q^{m_0+1}$.
+
+3. **Factorization-Free Computation of $m_0$ & Cached Rejection (`src/deterministic_zero_test.py`):**
+   - **`compute_m0_without_factoring`:** Because $T \mid (q^2 - 1)$ and $q \nmid (q^2 - 1)/T$, we have $v_q(\xi^{q^2 - 1} - 1) = m_0$. Lifting the simple root $r \equiv 0 \pmod q$ of $g(x) \equiv (x - r)(x^2 + a x + b) \pmod{q^K}$ and working in $\mathcal{A}_K = (\mathbb{Z}/q^K\mathbb{Z})[X]/(X^2 + a X + b)$ where $\xi = X^2/b \equiv -1 - (a b^{-1})X \pmod{q^K}$, binary powering computes $m_0$ up to cap $K$ in $O(\log q)$ operations in $\mathcal{A}_K$ without factoring $q \mp 1$ or computing $T$. Across all 12 tested prime-$q$ instances of $g_{N,\pm 2}$, `compute_m0_without_factoring` certifies $m_0 = 1$ (`exact=True`).
+   - **`e2_cached_collision_reject` (`e2_cached_candidate_rejection` in Lean):** If a candidate $n_{\mathrm{old}}$ passes modulo $q^m$ ($m \le \min(n_{\mathrm{old}}, n_{\mathrm{new}})$), checking $\xi^{n_{\mathrm{new}} - n_{\mathrm{old}}} \not\equiv 1 \pmod{q^m}$ in $\mathcal{A}_m$ certifies $u_{n_{\mathrm{new}}} \ne 0$ in $O(\log(n_{\mathrm{new}} - n_{\mathrm{old}}))$ multiplications without evaluating $u_{n_{\mathrm{new}}}$.
+
+4. **Exact Regression Example 2: An Isolated $29^2$-Divisible False Candidate (`experiments/near_equal_modulus_search.py`):**
+   Take $g_{3,+2}(x) = x^3 - 2x^2 + 6x - 29$ ($q = 29, T = 7, m_0 = 1$) with initial data $(u_0, u_1, u_2) = (1, 0, 1)$, $p = 5, M = 62, \ell = 18$ ($\frac{1}{5}F_{18}(z) \equiv 4 + 4z \pmod 5$, $\kappa_5 = V = 1$). Here $29 \mid u_n \iff n \equiv 1 \pmod 7$, and since $7 \nmid 62 d_j 5^j$, consecutive active lifts cannot both pass even modulo $29$:
+   | Depth $R$ | Truncation $z_R$ | Candidate $n_R = 62z_R + 18$ | $v_5(u_{n_R})$ | $v_{29}(u_{n_R})$ | Residue mod $29$ or $29^3$ |
+   |---|---|---|---|---|---|
+   | $5$ | $2{,}244$ | $139{,}146$ | $6$ | $0$ | $\not\equiv 0 \pmod{29}$ |
+   | $6$ | $14{,}744$ | $914{,}146$ | $7$ | $0$ | $u_{n_6} \equiv 1 \pmod{29}$ |
+   | $7$ | $30{,}369$ | $1{,}882{,}896$ | $8$ | $2$ | $u_{n_7} \equiv 1682 = 2 \cdot 29^2 \pmod{29^3}$ |
+   | $8$ | $342{,}869$ | $21{,}257{,}896$ | $9$ | $0$ | $u_{n_8} \equiv 28 \pmod{29}$ (rejected by `e2_cached_collision_reject` from $n_7$!) |
+   | $9$ | $733{,}494$ | $45{,}476{,}646$ | $10$ | $0$ | $\not\equiv 0 \pmod{29}$ |
+
+5. **Sharpened Single-Candidate Separation Target (Eq. 14) [Open]:**
+   Along an isolating simple branch of $F_\ell$ with root $x_0 = \sum_{j \ge 0} d_j p^j$, $v_p(u_{n_R}) = \kappa_p + J_R$ where $\kappa_p = v_p(F_\ell'(x_0))$ and $J_R = \min\{j \ge R : d_j \ne 0\}$ is the next active digit position. Because $v_q(M d_{J_R} p^{J_R}) = v_q(M) + v_q(d_{J_R})$ is independent of $J_R$, the collision theorem forces any candidate with $v_q(u_{n_R}) > m_0 + v_q(M)$ to have shallow active neighbors, leaving open the single-candidate coupling bound:
+   $$u_{n_R} \ne 0 \quad\Longrightarrow\quad \bigl(\kappa_p + J_R < P(\mathcal{L})\bigr) \;\lor\; \bigl(v_q(u_{n_R}) < Q(\mathcal{L})\bigr).$$
+
 ### 4.7 Lean inventory for Part IV
 
 | Theorem | File | Assumptions |
@@ -346,5 +386,6 @@ Rather than bounding all zeros unconditionally, Route E2 exploits the certified 
 | `cubic_two_sum_norm_identity`, `cubic_two_sum_norm_at_zero`, `cubic_two_sum_norm_defect_identity` | `Skolem/DeterministicZeroTest.lean` | **none** (standard axioms only; proves $(x+y)(y+z)(z+x) = (x+y+z)(xy+yz+zx)-xyz$, its monomial collapse at $x+y+z=0$, and Lemma E2.2's norm-defect identity $\mathcal{E}_n = u_n T_n$) |
 | `two_sum_hankel_det_identity`, `cubic_mixed_shift_det_identity`, `cubic_mixed_shift_det_at_zero` | `Skolem/DeterministicZeroTest.lean` | **none** (standard axioms only; proves the Route E1 Hankel and mixed shift-determinant identities) |
 | `g3pos2TraceSeq_mod29_closed_form_pair`, `not_dvd_29_pow17_add_pow14`, `g3pos2TraceSeq_no_zeros` | `Skolem/DeterministicZeroTest.lean` | **none** (standard axioms only; proves $29 \nmid u_n$ and $u_n \ne 0$ for all $n \in \mathbb{N}$ on the $g_{3,+2}$ trace sequence) |
+| `e2_unit_pair_collision_identity`, `e2_unit_pair_collision_dvd`, `e2_cached_candidate_rejection`, `e2_digit_block_separation_bound`, `e2_consecutive_active_lift_bound`, `gl3_F5_card_factored` | `Skolem/DeterministicZeroTest.lean` | **none** (standard axioms only; proves the unit-pair collision identity/divisibility, cached candidate rejection rule, digit-block window bound, consecutive-active-lift bound, and $|\mathrm{GL}_3(\mathbb{F}_5)| = 2^7 \cdot 3 \cdot 5^3 \cdot 31$) |
 | `smyth_mahler_measure_consecutive_gap_order3/4`, `archimedean_gap_zero_bound`, `order3_unit_branch_smyth_baker_zero_bound`, `padic_two_root_yu_zero_bound`, `e2_candidate_dual_prime_zero_test_iff` | `Skolem/DeterministicZeroTest.lean` | Smyth's bound, Mahler-measure inequality, two-term Baker/Yu bounds, or Candidate Separation Target passed as explicit hypotheses; the deduction to $u_k \ne 0$ / $u_n = 0$ is formal |
 | `factorization_free_composite_power_test_iff`, `order3_global_local_dichotomy_iff` | `Skolem/DeterministicZeroTest.lean` | Baker/Yu-type precision bound as a hypothesis; **superseded** by the zero-bound theorems above |

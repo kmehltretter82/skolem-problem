@@ -37,6 +37,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import mpmath as mp
 
 from src.deterministic_zero_test import (
+    compute_m0_without_factoring,
+    e2_cached_collision_reject,
     e2_large_prime_rejection_filter,
     e2_odd_order_trace_certificate,
     order3_global_local_dichotomy,
@@ -218,6 +220,8 @@ def verify_order3_open_class_family() -> List[Dict[str, object]]:
             assert info["branch"] == "NON_ARCHIMEDEAN_NEWTON_BRANCH"
             assert info["D"] % q == 0, f"Expected q={q} | D={info['D']}"
 
+            m0_info = compute_m0_without_factoring(b2, b1, b0, q=q, K=4)
+            assert m0_info is not None and m0_info["exact"] is True
             z_info = search_family_zeros(coeffs, box=3, max_k=250) if found < 4 else None
             records.append({
                 "c": c,
@@ -227,6 +231,7 @@ def verify_order3_open_class_family() -> List[Dict[str, object]]:
                 "S": info["S"],
                 "D": info["D"],
                 "D_k_eq_1": q_k1,
+                "m0": m0_info["m0"],
                 "moduli": mods,
                 "gaps": gaps,
                 "max_consecutive_gap": max(gaps),
@@ -335,6 +340,66 @@ def verify_route_e2_g3pos2_trace_example() -> Dict[str, object]:
     }
 
 
+def verify_route_e2_isolated_29sq_example() -> Dict[str, object]:
+    """
+    Route E2 Branch-Collision & Isolated 29^2-Divisible Candidate Example (§4.6.5):
+      g_{3,+2}(x) = x^3 - 2x^2 + 6x - 29 (q = 29 prime, m_0 = 1),
+      initial data (u_0, u_1, u_2) = (1, 0, 1), u_{n+3} = 2 u_{n+2} - 6 u_{n+1} + 29 u_n.
+    At p = 5, M = 62, ell = 18:
+      F_{18}(z) / 5 == 4 + 4z (mod 5) has a unique 5-adic root lifting across R = 5..9:
+        R = 5: z_5 =    2244, n_5 =   139146, v_5(u_{n_5}) =  6, v_{29}(u_{n_5}) = 0
+        R = 6: z_6 =   14744, n_6 =   914146, v_5(u_{n_6}) =  7, v_{29}(u_{n_6}) = 0 (u == 1 mod 29)
+        R = 7: z_7 =   30369, n_7 =  1882896, v_5(u_{n_7}) =  8, v_{29}(u_{n_7}) = 2 (u == 1682 = 2*29^2 mod 29^3)
+        R = 8: z_8 =  342869, n_8 = 21257896, v_5(u_{n_8}) =  9, v_{29}(u_{n_8}) = 0 (u == 28 mod 29)
+        R = 9: z_9 =  733494, n_9 = 45476646, v_5(u_{n_9}) = 10, v_{29}(u_{n_9}) = 0
+      Confirming the consecutive-active-lift theorem min(v_q(u_{n_old}), v_q(u_{n_new}), n_old) <= m_0 = 1
+      and cached rejection of n_8 from n_7 without evaluating u_{n_8}.
+    """
+    b2, b1, b0 = -2, 6, -29
+    lrs = LinearRecurrenceSequence(coeffs=[29, -6, 2], initial=[1, 0, 1])
+    p, M, ell = 5, 62, 18
+    m0_res = compute_m0_without_factoring(b2, b1, b0, q=29, K=4)
+    assert m0_res is not None and m0_res["m0"] == 1 and m0_res["exact"] is True
+
+    expected = [
+        (5, 2244, 139146, 6, 0),
+        (6, 14744, 914146, 7, 0),
+        (7, 30369, 1882896, 8, 2),
+        (8, 342869, 21257896, 9, 0),
+        (9, 733494, 45476646, 10, 0),
+    ]
+    # Lift z_R directly via Hensel on F_{18}(z) to reach R = 9 rapidly, and also check ZeroSearch at R = 5
+    certs_R5 = lrs.zero_search_subsequence_certificates(ell=ell, M=M, p=p, N=M * (p ** 5) + ell, nu=12)
+    assert len(certs_R5) == 1 and (certs_R5[0].z, certs_R5[0].n) == (2244, 139146)
+
+    rows = []
+    for R, exp_z, exp_n, exp_v5, exp_v29 in expected:
+        n_idx = M * exp_z + ell
+        assert n_idx == exp_n
+        val_5 = v_p(lrs.term(n_idx, mod=p ** (R + 3)), p, R + 3)
+        val_29 = v_p(lrs.term(n_idx, mod=29 ** 4), 29, 4)
+        assert (val_5, val_29) == (exp_v5, exp_v29), f"At R={R}: got {(val_5, val_29)}, expected {(exp_v5, exp_v29)}"
+        rows.append((R, exp_z, n_idx, val_5, val_29))
+
+    assert lrs.term(914146, mod=29) == 1
+    assert lrs.term(1882896, mod=29 ** 3) == 1682 == 2 * (29 ** 2)
+    assert lrs.term(21257896, mod=29) == 28
+
+    # Consecutive active lift theorem check: min(v_29(u_{n_R}), v_29(u_{n_{R+1}})) <= m_0 = 1
+    for i in range(len(rows) - 1):
+        assert min(rows[i][4], rows[i + 1][4]) <= m0_res["m0"]
+
+    # Cached collision rejection of n_8 from n_7 at m = 1 and m = 2 (without evaluating u_{n_8}):
+    assert e2_cached_collision_reject(b2, b1, b0, q=29, m_prec=1, n_old=1882896, n_new=21257896) is False
+    assert e2_cached_collision_reject(b2, b1, b0, q=29, m_prec=2, n_old=1882896, n_new=21257896) is False
+
+    return {
+        "m0": m0_res["m0"],
+        "rows": rows,
+        "u_n7_mod_29_cubed": lrs.term(1882896, mod=29 ** 3),
+    }
+
+
 def main() -> None:
     print("=" * 78)
     print("STEP B3 & B4: NEAR-EQUAL-MODULUS FAMILIES & OPEN-CLASS CONSTRUCTIONS")
@@ -384,7 +449,7 @@ def main() -> None:
         )
         dom_type = "complex-pair > real" if rec["c"] < 0 else "real > complex-pair"
         print(
-            f"   c={rec['c']:+d} ({dom_type}), N={rec['N']:2d}: q={rec['q']:6d} (prime), "
+            f"   c={rec['c']:+d} ({dom_type}), N={rec['N']:2d}: q={rec['q']:6d} (prime, m0={rec['m0']}), "
             f"S={rec['S']}, D_{{k=1}}={rec['D_k_eq_1']}, D={rec['D']}, "
             f"max_gap={rec['max_consecutive_gap']:.3e} (asymp={rec['asymptotic_gap_c_over_4N3']:.3e})"
             f"{z_str}, max k/||u||={p_res['max_ratio_k_over_bits']:.3f}, extra_z={p_res['extra_zeros_count']}"
@@ -398,10 +463,23 @@ def main() -> None:
 
     # 5. Route E2: g_{3,+2} trace sequence 5-adic candidate branch & mod-29 rejection
     e2_res = verify_route_e2_g3pos2_trace_example()
-    print("\n5. Route E2 Regression Example: g_{3,+2}(x) = x^3 - 2x^2 + 6x - 29, u=(3,2,-8), p=5, M=62, ell=12:")
+    print("\n5. Route E2 Regression Example 1: g_{3,+2}(x) = x^3 - 2x^2 + 6x - 29, u=(3,2,-8), p=5, M=62, ell=12:")
     for R, z, n_idx, val5, mod29 in e2_res["rows"]:
         print(f"   R={R}: z={z:4d}, n=62z+12={n_idx:6d}, v_5(u_n)={val5}, u_n mod 29={mod29:2d} (rejected!)")
     print(f"   Mod-29 odd-order trace certificate: {e2_res['odd_order_certificate']}")
+
+    # 6. Route E2 Branch-Collision & Isolated 29^2-Divisible Candidate Example: u=(1,0,1), ell=18
+    e2_coll = verify_route_e2_isolated_29sq_example()
+    print(
+        f"\n6. Route E2 Regression Example 2 (Branch Collision & Isolated 29^2 Candidate): "
+        f"u=(1,0,1), p=5, M=62, ell=18, m0={e2_coll['m0']}:"
+    )
+    for R, z, n_idx, val5, val29 in e2_coll["rows"]:
+        print(f"   R={R}: z={z:6d}, n=62z+18={n_idx:8d}, v_5(u_n)={val5:2d}, v_29(u_n)={val29}")
+    print(
+        f"   At R=7 (n=1,882,896): u_n mod 29^3 = {e2_coll['u_n7_mod_29_cubed']} = 2 * 29^2; "
+        f"consecutive active lifts satisfy min(v_29(u_old), v_29(u_new)) <= m0 = 1!"
+    )
 
 
 if __name__ == "__main__":

@@ -507,6 +507,103 @@ theorem g3pos2TraceSeq_no_zeros (n : ℕ) : ¬ ((29 : ℤ) ∣ g3pos2TraceSeq n)
   exact ⟨hnd, fun hz => hnd (by rw [hz]; exact dvd_zero _)⟩
 
 /--
+**Route E2 Result 1a — Division-Free Unit-Pair Collision Identity (`notes/deterministic_zero_testing.md` §4.6.5):**
+Over any commutative ring `R`, for `u_n = c_1 μ_1^n + c_2 μ_2^n + c_3 μ_3^n` and
+`u_{n+Δ} = c_1 μ_1^{n+Δ} + c_2 μ_2^{n+Δ} + c_3 μ_3^{n+Δ}`, eliminating the `c_2 μ_2` term gives
+`(u_{n+Δ} - μ_2^Δ u_n) - c_3 μ_3^n (μ_3^Δ - μ_2^Δ) = c_1 μ_1^n (μ_1^Δ - μ_2^Δ)`.
+-/
+theorem e2_unit_pair_collision_identity {R : Type*} [CommRing R]
+    (c1 c2 c3 μ1 μ2 μ3 : R) (n Δ : ℕ) :
+    ((c1 * μ1 ^ (n + Δ) + c2 * μ2 ^ (n + Δ) + c3 * μ3 ^ (n + Δ)) -
+      μ2 ^ Δ * (c1 * μ1 ^ n + c2 * μ2 ^ n + c3 * μ3 ^ n)) -
+      c3 * μ3 ^ n * (μ3 ^ Δ - μ2 ^ Δ) =
+    c1 * μ1 ^ n * (μ1 ^ Δ - μ2 ^ Δ) := by
+  rw [pow_add, pow_add, pow_add]
+  ring
+
+/--
+**Route E2 Result 1b — Unit-Pair Collision Divisibility Lemma (`notes/deterministic_zero_testing.md` §4.6.5):**
+Within the third-root precision range where `q_m ∣ c_3 μ_3^n`, if both `q_m ∣ u_n` and `q_m ∣ u_{n+Δ}`,
+then `q_m ∣ c_1 μ_1^n (μ_1^Δ - μ_2^Δ)` (which for `q`-adic units `c_1, μ_1, μ_2` is `(μ_1/μ_2)^Δ ≡ 1 (mod q^m)`).
+-/
+theorem e2_unit_pair_collision_dvd {R : Type*} [CommRing R]
+    (u : ℕ → R) (c1 c2 c3 μ1 μ2 μ3 q_m : R) (n Δ : ℕ)
+    (hu_n : u n = c1 * μ1 ^ n + c2 * μ2 ^ n + c3 * μ3 ^ n)
+    (hu_nΔ : u (n + Δ) = c1 * μ1 ^ (n + Δ) + c2 * μ2 ^ (n + Δ) + c3 * μ3 ^ (n + Δ))
+    (h_third : q_m ∣ c3 * μ3 ^ n)
+    (hdvd_n : q_m ∣ u n)
+    (hdvd_nΔ : q_m ∣ u (n + Δ)) :
+    q_m ∣ c1 * μ1 ^ n * (μ1 ^ Δ - μ2 ^ Δ) := by
+  have hid := e2_unit_pair_collision_identity c1 c2 c3 μ1 μ2 μ3 n Δ
+  rw [← hu_n, ← hu_nΔ] at hid
+  rw [← hid]
+  apply dvd_sub
+  · exact dvd_sub hdvd_nΔ (dvd_mul_of_dvd_right hdvd_n _)
+  · exact dvd_mul_of_dvd_left h_third _
+
+/--
+**Route E2 Result 3 — Cached Candidate Rejection Rule (Eq. 13, `notes/deterministic_zero_testing.md` §4.6.5):**
+Suppose a candidate `n` has already passed the `q^m`-test (`q_m ∣ u n`) within the third-root precision
+range (`q_m ∣ c_3 μ_3^n`). For any later candidate `n + Δ`, if `¬ (q_m ∣ c_1 μ_1^n (μ_1^Δ - μ_2^Δ))`
+(i.e. `ξ^Δ ≢ 1 (mod q^m)`), then `¬ (q_m ∣ u (n + Δ))` and hence `u (n + Δ) ≠ 0` — rejecting `n + Δ`
+without evaluating `u (n + Δ)`.
+-/
+theorem e2_cached_candidate_rejection
+    (u : ℕ → ℤ) (c1 c2 c3 μ1 μ2 μ3 q_m : ℤ) (n Δ : ℕ)
+    (hu_n : u n = c1 * μ1 ^ n + c2 * μ2 ^ n + c3 * μ3 ^ n)
+    (hu_nΔ : u (n + Δ) = c1 * μ1 ^ (n + Δ) + c2 * μ2 ^ (n + Δ) + c3 * μ3 ^ (n + Δ))
+    (h_third : q_m ∣ c3 * μ3 ^ n)
+    (hdvd_n : q_m ∣ u n)
+    (h_not_coll : ¬ (q_m ∣ c1 * μ1 ^ n * (μ1 ^ Δ - μ2 ^ Δ))) :
+    ¬ (q_m ∣ u (n + Δ)) ∧ u (n + Δ) ≠ 0 := by
+  have hnd : ¬ (q_m ∣ u (n + Δ)) := fun hdvd_nΔ =>
+    h_not_coll (e2_unit_pair_collision_dvd u c1 c2 c3 μ1 μ2 μ3 q_m n Δ hu_n hu_nΔ h_third hdvd_n hdvd_nΔ)
+  exact ⟨hnd, fun hz => hnd (by rw [hz]; exact dvd_zero _)⟩
+
+/--
+**Route E2 Result 2a — Digit-Block Separation Bound (Eqs. 6–7, `notes/deterministic_zero_testing.md` §4.6.5):**
+For two distinct canonical truncations `z_{R_1} < z_{R_2}` at depths `R_1 < R_2` (`h = R_2 - R_1`),
+the normalized digit block `B = (z_{R_2} - z_{R_1}) / p^{R_1}` satisfies `0 < B < p^h`.
+If the order-lifting law forces `T_star * q^e ∣ B` (where `e = max(0, m - m_0 - a)`), then
+`T_star * q^e < p^h`. Contrapositively, whenever `p^h ≤ T_star * q^e`, no such digit block `B` exists.
+-/
+theorem e2_digit_block_separation_bound
+    (B p h T_star q e : ℕ)
+    (hB_pos : 0 < B)
+    (hB_lt : B < p ^ h)
+    (hdvd : T_star * q ^ e ∣ B) :
+    T_star * q ^ e < p ^ h :=
+  Nat.lt_of_le_of_lt (Nat.le_of_dvd hB_pos hdvd) hB_lt
+
+/--
+**Route E2 Result 2b — Consecutive Active Lift Bound (Eq. 9, `notes/deterministic_zero_testing.md` §4.6.5):**
+Let `w_q(n) = min(v_q_u n, n)` be the `q`-adic valuation truncated at the third-root threshold.
+When the collision inequality gives `min(w_q(n_old), w_q(n_new)) ≤ m_0 + v_q(Δ)` and a consecutive
+active Hensel lift `Δ = M d_j p^j` (`1 ≤ d_j < p < q`) satisfies `v_q(Δ) = v_q(M)`, we obtain
+`min(min(v_q_u n_old, v_q_u n_new), n_old) ≤ m_0 + v_q_M` (and `≤ m_0` when `v_q_M = 0`).
+In particular, if `m_0 + v_q_M < n_old`, the two consecutive active lifts cannot both have
+`q`-adic valuation `≥ m_0 + v_q_M + 1`.
+-/
+theorem e2_consecutive_active_lift_bound
+    (vq_old vq_new n_old n_new m0 vq_Δ vq_M : ℕ)
+    (h_n : n_old ≤ n_new)
+    (h_coll : min (min vq_old n_old) (min vq_new n_new) ≤ m0 + vq_Δ)
+    (h_active_step : vq_Δ = vq_M) :
+    min (min vq_old vq_new) n_old ≤ m0 + vq_M ∧
+    (m0 + vq_M < n_old → ¬ (m0 + vq_M + 1 ≤ vq_old ∧ m0 + vq_M + 1 ≤ vq_new)) := by
+  omega
+
+/--
+For `p = 5` and order `d = 3`, the multiplicative period `M` divides
+`|GL_3(𝔽_5)| = (5^3 - 1)(5^3 - 5)(5^3 - 25) = 1,488,000 = 2^7 * 3 * 5^3 * 31`,
+whose prime factors are `{2, 3, 5, 31}`. Since `N^3 ± 2 ≠ 31` for all `N : ℕ`, every prime
+`q = N^3 ± 2 ≥ 29` is coprime to `|GL_3(𝔽_5)|` and therefore satisfies `v_q(M) = 0`.
+-/
+theorem gl3_F5_card_factored :
+    (5 ^ 3 - 1) * (5 ^ 3 - 5) * (5 ^ 3 - 25) = 2 ^ 7 * 3 * 5 ^ 3 * 31 := by
+  decide
+
+/--
 *(Superseded by the zero-bound theorems in `Skolem/UnitRootDominance.lean` and above; retained for
 backwards compatibility.)*
 Suppose `D` has a prime factor `q ∣ D` at which `¬ ((q : ℤ) ^ ν ∣ u m)` for all `m ≤ N` with `u m ≠ 0`.
